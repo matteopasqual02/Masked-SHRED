@@ -1,6 +1,7 @@
 import torch                            # type: ignore
 import torch.nn as nn                   # type: ignore
 from torch.utils.data import DataLoader # type: ignore
+from tqdm import tqdm                   # type: ignore
 
 from .utils import mae, mse, mre, num2p
 
@@ -92,7 +93,8 @@ def fit(
     best_params = model.state_dict()
 
     #train loop 
-    for epoch in range(epochs):     #loop over the epochs
+    pbar = tqdm(range(epochs), desc="Training", disable=not verbose)
+    for epoch in pbar:
         
         #for each epoch
         for k, data in enumerate(train_loader):     #loop over the batches
@@ -121,9 +123,13 @@ def fit(
             val_error = loss_output(ytrue_val, ypred_val)
             val_errors.append(val_error)
 
-        #logging
+        #logging with tqdm
         if verbose:
-            print(f"Epoch {epoch+1}/{epochs} - Train Error: {formatter(train_errors[-1])} - Val Error: {formatter(val_errors[-1])}")
+            pbar.set_postfix({
+                "Train Error": formatter(train_errors[-1]), 
+                "Val Error": formatter(val_errors[-1]),
+                "Patience": patience_counter,
+                })
 
         #early stopping
         if val_error == torch.min(torch.tensor(val_errors)):    #if the current validation error is the best one so far
@@ -136,7 +142,8 @@ def fit(
         if patience_counter >= patience:      
             model.load_state_dict(best_params)  # Load the best model parameters before returning 
             if verbose:
-                print(f"TRAINING DONE: Early stopping at epoch {epoch+1}")
+                print(f"Early stopping at epoch {epoch+1}")
+                pbar.close()
 
             train_err_np = torch.tensor(train_errors).detach().cpu().numpy()
             val_err_np = torch.tensor(val_errors).detach().cpu().numpy()
@@ -145,7 +152,8 @@ def fit(
     # If we finish all epochs without triggering early stopping
     model.load_state_dict(best_params)  # Load the best model parameters before returning
     if verbose:
-        print(f"TRAINING DONE: Reached maximum number of epochs ({epochs})")
+        print(f"Training Complete ({epochs} epochs)")
+        pbar.close()
     train_err_np = torch.tensor(train_errors).detach().cpu().numpy()
     val_err_np = torch.tensor(val_errors).detach().cpu().numpy()
     return train_err_np, val_err_np
