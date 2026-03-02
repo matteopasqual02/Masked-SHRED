@@ -15,6 +15,10 @@ def mre(datatrue, datapred):
     return ((datatrue - datapred).pow(2).sum(axis = -1).sqrt() 
         / (datatrue).pow(2).sum(axis = -1).sqrt()).mean()
 
+def rmse(datatrue, datapred):
+    # Root Mean Squared Error
+    return torch.sqrt(mse(datatrue, datapred))
+
 # Convert a probability to a percentage string with two decimal places
 num2p = lambda prob: ("%.2f" % (100*prob)) + "%"
 
