@@ -17,7 +17,7 @@ class SHRED_GRUD(nn.Module):
         decoder_sizes: list[int] = [350,400],
         dropout: float = 0.0
     ):
-        super(SHRED_GRUD, self).__init__()
+        super().__init__()
 
         #GRU-D encoder (replaces the LSTM encoder from classic SHRED)
         self.encoder = GRUD(

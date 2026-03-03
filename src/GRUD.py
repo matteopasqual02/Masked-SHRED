@@ -26,7 +26,7 @@ class FilterLinear(nn.Module):
         bias: bool = True
     ):
         #initialize the linear layer with the given in_features and out_features
-        super(FilterLinear, self).__init__()
+        super().__init__()
         self.in_features = in_features
         self.out_features = out_features
 
@@ -73,7 +73,7 @@ class GRUD(nn.Module):
         X_mean: torch.Tensor,
         output_last: bool = False
     ):
-        super(GRUD, self).__init__()
+        super().__init__()
 
         #store the needed parameters 
         self.hidden_size = hidden_size
@@ -98,7 +98,7 @@ class GRUD(nn.Module):
 
         #initialize gamma_x and gamma_h linear layers for the decay mechanism
         self.gamma_x_l = FilterLinear(self.delta_size, self.delta_size, self.identity)
-        self.gamma_h_l = nn.Linear(self.delta_size, self.delta_size)
+        self.gamma_h_l = nn.Linear(self.delta_size, self.hidden_size)
 
         #initialize the output linear layer
         self.output_last = output_last
@@ -117,8 +117,8 @@ class GRUD(nn.Module):
         dim_size = x.shape[1]
 
         #deltas decay
-        delta_x = torch.exp(-torch.max(self.gamma_x_l(delta), self.zero))
-        delta_h = torch.exp(-torch.max(self.gamma_h_l(delta), self.zero))
+        delta_x = torch.exp(-torch.clamp(self.gamma_x_l(delta), min=0))
+        delta_h = torch.exp(-torch.clamp(self.gamma_h_l(delta), min=0))
 
         # xnew computation
         x = mask * x + (1 - mask) * (delta_x * x_last_obsv + (1 - delta_x) * x_mean)
@@ -131,7 +131,7 @@ class GRUD(nn.Module):
 
         #combined_r + h_tilda computation
         combined_r = torch.cat((x, r * h, mask), dim=1)
-        h_tilda = F.tanh(self.hl(combined_r))
+        h_tilda = torch.tanh(self.hl(combined_r))
 
         #final h computation
         h = (1 - z) * h + z * h_tilda
