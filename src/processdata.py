@@ -25,6 +25,27 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
     
 
 #Padding Function
+def PaddingGRUD(data, lag):
+
+    # Extract time-series of lenght equal to lag from longer time series in data,
+    # whose dimension is (number of trajectories, number of channels, sequence length, data shape)
+    ntrajectories, nchannels, ntimes, nsensors = data.shape
+    data_padded = torch.zeros(ntrajectories * ntimes, nchannels, lag, nsensors)
+
+    # Loop through each trajectory and time step in the input data, 
+    # and pad with zeros if the current time step is less than the lag, 
+    # or take the last 'lag' time steps if the current time step is greater than or equal to the lag
+    for i in range(ntrajectories):
+        for j in range(1, ntimes + 1):
+            if j < lag:                                         # pad the beginning with zeros
+                data_padded[i * ntimes + j - 1, :, -j:, :] = data[i, :, :j, :]
+            else:                                               # full window
+                data_padded[i * ntimes + j - 1] = data[i, :, j - lag:j, :]
+
+    return data_padded
+
+
+#Padding Function
 def Padding(data,lag):
 
     # Extract time-series of lenght equal to lag from longer time series in data,
