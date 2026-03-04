@@ -3,7 +3,7 @@ import torch.nn as nn                   # type: ignore
 from torch.utils.data import DataLoader # type: ignore
 from tqdm import tqdm                   # type: ignore
 
-from .utils import mae, mse, mre, num2p
+from ..utils import mae, mse, mre, num2p
 from .GRUD import GRUD
 
 class SHRED_GRUD(nn.Module):
