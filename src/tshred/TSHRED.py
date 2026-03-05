@@ -7,7 +7,7 @@ from tqdm import tqdm   #type: ignore
 
 from .transformer import Transformer
 from .sdn import MLP, CNN
-from .utils import num2p, mre, mse
+from ..utils import num2p, mre, mse
 
 class TSHRED(nn.Module):
 
