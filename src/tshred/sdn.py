@@ -41,14 +41,14 @@ class MLP(nn.Module):
         self.model = model.to(device)           # Move the model to the specified device
 
     def forward(self, x):
-        sindy_loss = x.get("sindy_loss", None)  # Extract the 'sindy_loss' from the input dictionary, if it exists
-        x = x["output"]
+        sindy_loss = x.get("sindy_loss", None)
+        # final_hidden_state: (batch, 1, hidden_size) -> (batch, hidden_size)
+        x = x["final_hidden_state"].squeeze(1)
         out = self.model(x)         # Pass the input through the MLP
-        out = self.dropout(out)     # Apply dropout to the output of the MLP
+        out = self.dropout(out)     # Apply dropout
 
-        # return the output of the MLP along with the 'sindy_loss' if it exists
         return {
-            "output": out,
+            "output": out,          # (batch, out_dim)
             "sindy_loss": sindy_loss
         }
     
@@ -93,26 +93,14 @@ class CNN(nn.Module):
 
     def forward(self, x):
         sindy_loss = x.get("sindy_loss", None)
-        x = x["output"]
+        # final_hidden_state: (batch, 1, hidden_size) -> (batch, hidden_size, 1)
+        x = x["final_hidden_state"].squeeze(1).unsqueeze(-1)
 
-        batch_size, forecast_length, sequence_length, hidden_dim = x.shape
-
-        # (b, f, s, d) -> (b, d, f, s)
-        x = x.permute(0, 3, 1, 2)
-        # (b, d, f, s) -> (b, d, f*s)
-        x = x.reshape(batch_size, hidden_dim, forecast_length * sequence_length)
-
-        out = self.model(x)
+        out = self.model(x)     # Conv1d: (batch, out_dim, 1)
         out = self.dropout(out)
-
-        # out shape assumed: (b, out_dim, f*s)
-        b, out_dim, _ = out.shape
-        # (b, o, f*s) -> (b, o, f, s)
-        out = out.reshape(b, out_dim, forecast_length, sequence_length)
-        # (b, o, f, s) -> (b, f, s, o)
-        out = out.permute(0, 2, 3, 1)
+        out = out.squeeze(-1)   # (batch, out_dim)
 
         return {
-            "output": out, 
+            "output": out,      # (batch, out_dim)
             "sindy_loss": sindy_loss
         }

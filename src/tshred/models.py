@@ -62,9 +62,20 @@ class TSHRED(nn.Module):
         # Pass the input through the encoder
         encoded = self.encoder(src)
         # Pass the encoded output through the decoder
-        decoded = self.decoder(encoded) 
+        decoded = self.decoder(encoded)
 
-        return decoded
+        # Unwrap dict output -> (batch, out_dim)
+        return decoded["output"]
+    
+    def freeze(self):
+        self.eval()  # Set the model to evaluation mode
+        for param in self.parameters():
+            param.requires_grad = False  # Freeze the parameters by setting requires_grad to False
+
+    def unfreeze(self):
+        self.train()  # Set the model to training mode
+        for param in self.parameters():
+            param.requires_grad = True  # Unfreeze the parameters by setting requires_grad to True
 
 def fit(
     model: TSHRED,
@@ -100,7 +111,7 @@ def fit(
             def closure():
                 optimizer.zero_grad()                 #zero the gradients
                 output = model(data[0])               #forward pass
-                loss = loss_fn(data[1], output["output"].squeeze(1))  #compute the loss
+                loss = loss_fn(data[1], output)  #compute the loss
                 loss.backward()                       #backward pass
                 return loss
             optimizer.step(closure)                 #optimizer step
@@ -111,12 +122,12 @@ def fit(
             #train error
             ytrue_train = train_dataset.Y
             ypred_train = model(train_dataset.X)
-            train_error = loss_output(ytrue_train, ypred_train["output"].squeeze(1))
+            train_error = loss_output(ytrue_train, ypred_train)
             train_errors.append(train_error)
             #validation error
             ytrue_val = val_dataset.Y
             ypred_val = model(val_dataset.X)
-            val_error = loss_output(ytrue_val, ypred_val["output"].squeeze(1))
+            val_error = loss_output(ytrue_val, ypred_val)
             val_errors.append(val_error)
 
         #logging with tqdm
