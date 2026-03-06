@@ -309,15 +309,50 @@ class Transformer(nn.Module):
             dropout=dropout, device=device
         )
 
+    def mask_data(self, src, src_mask):
+        # Build attention mask ---------------------------------------------------
+        # If src_mask is a 2D boolean key-padding mask (batch, seq_len):
+        #   True  = valid key position (may be attended to)
+        #   False = missing time step  (masked out → -inf)
+        # We convert it to a 3D additive float mask (batch, seq_len_q, seq_len_k)
+        # and combine it with the causal upper-triangular mask so that both
+        # constraints are active simultaneously.
+        if src_mask is not None and src_mask.dim() == 2:
+            B, L = src_mask.shape
+            # Build (B, 1, 1, L_k) → broadcasts over (B, n_heads, L_q, L_k) in SDPA.
+            # We intentionally skip causal masking here: the encoder already has a
+            # fixed past window so causal ordering is unnecessary, and combining it
+            # with the key-padding mask causes all-inf rows for zero-padded positions.
+            additive = torch.zeros(B, 1, 1, L, dtype=src.dtype, device=src.device)
+            additive = additive.masked_fill(~src_mask.view(B, 1, 1, L), float('-inf'))
+
+            # Safety: if every key in a window is masked the row is all-inf → NaN
+            # after softmax.  Fall back to uniform attention for those rows.
+            all_masked = (src_mask.view(B, 1, 1, L) == False).all(dim=-1, keepdim=True)  # (B,1,1,1)
+            additive = additive.masked_fill(all_masked, 0.0)
+
+            attn_mask = additive
+            is_causal = False          # key-padding mask is fully baked in
+        else:
+            attn_mask = src_mask        # None or already a 3-D float mask
+            # If an explicit mask is provided, is_causal must be False
+            is_causal = (src_mask is None)
+
+        # Masking
+        return attn_mask, is_causal
+
     def forward(self, src, src_mask=None, is_causal=True):
 
         # Embed the input and add positional encoding
         src = self.input_embedding(src)  # Project input features to the model's embedding dimension
         src = self.pos_encoder(src)      # Add positional encoding to the input
 
+        # Build attention mask
+        attn_mask, is_causal = self.mask_data(src, src_mask) 
+
         # Pass the input through the transformer encoder
         transformer_output = self.transformer_encoder(
-            src, mask=src_mask, is_causal=is_causal
+            src, mask=attn_mask, is_causal=is_causal
         ) 
 
         # Add an extra dimension for compatibility with the expected output shape

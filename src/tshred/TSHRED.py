@@ -57,10 +57,10 @@ class TSHRED(nn.Module):
         else:
             raise NotImplementedError(f"Decoder {args.decoder} not implemented")
         
-    def forward(self, src):
-
-        # Pass the input through the encoder
-        encoded = self.encoder(src)
+    def forward(self, src, mask=None):
+        
+        # Pass the input through the encoder, optionally with key-padding mask
+        encoded = self.encoder(src, src_mask=mask)
         # Pass the encoded output through the decoder
         decoded = self.decoder(encoded)
 
@@ -110,8 +110,17 @@ def fit(
             #define the closure function for the optimizer step
             def closure():
                 optimizer.zero_grad()                 #zero the gradients
-                output = model(data[0])               #forward pass
-                loss = loss_fn(data[1], output)  #compute the loss
+
+                # Support both (X, Y) and (X, mask, Y) datasets
+                # if dim == 3, we assume the dataset returns (X, mask, Y) and we pass the mask to the model for a masked forward pass
+                if len(data) == 3:
+                    output = model(data[0], mask=data[1])   #masked forward pass
+                    loss = loss_fn(data[2], output)
+                # else, we assume the dataset returns (X, Y) and we perform a standard forward pass without masking
+                else:
+                    output = model(data[0])               #forward pass
+                    loss = loss_fn(data[1], output)  #compute the loss
+
                 loss.backward()                       #backward pass
                 return loss
             optimizer.step(closure)                 #optimizer step
@@ -119,14 +128,18 @@ def fit(
         #compute the training and validation errors
         model.eval()                            #set the model to evaluation mode
         with torch.no_grad():                   #disable gradient computation
+
             #train error
             ytrue_train = train_dataset.Y
-            ypred_train = model(train_dataset.X)
+            train_mask = getattr(train_dataset, 'mask', None)
+            ypred_train = model(train_dataset.X, mask=train_mask)
             train_error = loss_output(ytrue_train, ypred_train)
             train_errors.append(train_error)
+            
             #validation error
             ytrue_val = val_dataset.Y
-            ypred_val = model(val_dataset.X)
+            val_mask = getattr(val_dataset, 'mask', None)
+            ypred_val = model(val_dataset.X, mask=val_mask)
             val_error = loss_output(ytrue_val, ypred_val)
             val_errors.append(val_error)
 
@@ -136,6 +149,7 @@ def fit(
                 "Train Error": formatter(train_errors[-1]), 
                 "Val Error": formatter(val_errors[-1]),
                 "Patience": patience_counter,
+                "Best Val Error": formatter(torch.min(torch.tensor(val_errors)))
                 })
 
         #early stopping

@@ -23,6 +23,23 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         return self.X[idx], self.Y[idx]
     
+class MaskedTimeSeriesDataset(torch.utils.data.Dataset):
+
+    # Initialize the dataset with input data X and target data Y, and a mask indicating which time steps are valid
+    def __init__(self, X, mask, Y):
+        self.X    = X
+        self.mask = mask
+        self.Y    = Y
+        self.len  = X.shape[0]
+
+    # Return the length of the dataset
+    def __len__(self):
+        return self.len
+
+    # Return the input and target data for a given index, along with the corresponding mask
+    def __getitem__(self, idx):
+        return self.X[idx], self.mask[idx], self.Y[idx]
+    
 
 #Padding Function
 def PaddingGRUD(data, lag):
@@ -61,3 +78,21 @@ def Padding(data,lag):
                 data_padded[i*data.shape[1]+j-1] = data[i, j-lag:j, :]
 
     return data_padded
+
+# Padding Function for boolean key masks
+def PaddingMask(mask, lag):
+
+    # Extract time-series of lenght equal to lag from longer time series in data,
+    # whose dimension is (number of time series, sequence length, data shape)
+
+    ntrajectories, ntimes = mask.shape
+    out = torch.zeros(ntrajectories * ntimes, lag, dtype=torch.bool)        # Initialize a new tensor to hold the padded masks, with dimensions (number of time series * sequence length, lag)
+
+    for i in range(ntrajectories):
+        for j in range(1, ntimes + 1):
+            if j < lag:                                         # pad the beginning with False
+                out[i * ntimes + j - 1, -j:] = mask[i, :j]      # leading positions stay False
+            else:                                               # full window
+                out[i * ntimes + j - 1] = mask[i, j - lag:j]
+
+    return out
