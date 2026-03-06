@@ -2,6 +2,7 @@ import torch                    #type: ignore
 import torch.nn as nn           #type: ignore
 import torch.nn.functional as F #type: ignore
 from typing import Optional     #type: ignore
+import copy
 
 
 # Multi-Head Attention module
@@ -203,7 +204,7 @@ class TransformerEncoder(nn.Module):
         self.num_layers = num_layers  # Store the number of layers
 
         # Create a list of encoder layers by deep copying the provided encoder layer
-        self.layers = nn.ModuleList([encoder_layer for _ in range(num_layers)])  # Stack multiple encoder layers
+        self.layers = nn.ModuleList([copy.deepcopy(encoder_layer) for _ in range(num_layers)])
 
         # Optional layer normalization to apply after the last encoder layer
         self.norm = norm
@@ -281,6 +282,7 @@ class Transformer(nn.Module):
     ):
         
         super().__init__()
+        dtype=torch.float32
 
         # Input projection layer to map input features to the model's embedding dimension
         self.input_embedding = nn.Linear(
@@ -290,7 +292,7 @@ class Transformer(nn.Module):
         self.encoder = TransformerEncoderLayer(
             d_model=hidden_size, n_heads=n_heads, dim_feedforward=dim_feedforward, 
             dropout=dropout, activation=activation, layer_norm_eps=layer_norm_eps,
-            norm_first=norm_first, bias=bias, device=device, dtype=None
+            norm_first=norm_first, bias=bias, device=device, dtype=dtype
         )
         # Encoder Norm
         encoder_norm = nn.LayerNorm(
@@ -299,7 +301,7 @@ class Transformer(nn.Module):
         # Transformer Encoder
         self.transformer_encoder = TransformerEncoder(
             encoder_layer=self.encoder, num_layers=num_encoder_layers, 
-            norm=encoder_norm, device=device, dtype=None
+            norm=encoder_norm, device=device, dtype=dtype
         )
         # Positional encoding
         self.pos_encoder = PositionalEncoding(
