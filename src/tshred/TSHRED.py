@@ -1,9 +1,10 @@
-import torch            #type: ignore
-import torch.nn as nn   #type: ignore
-from torch.utils.data import DataLoader  #type: ignore
-import numpy as np      #type: ignore
-from types import SimpleNamespace
-from tqdm import tqdm   #type: ignore
+import torch                                #type: ignore
+import torch.nn as nn                       #type: ignore
+from torch.utils.data import DataLoader     #type: ignore
+import numpy as np                          #type: ignore
+from types import SimpleNamespace           #type: ignore
+from tqdm import tqdm                       #type: ignore
+from torch.optim.lr_scheduler import ReduceLROnPlateau      #type: ignore
 
 from .transformer import Transformer
 from .sdn import MLP, CNN
@@ -89,11 +90,21 @@ def fit(
     loss_output = mre,
     formatter = num2p,
     verbose: bool = False,
-    patience: int = 100
+    patience: int = 100,
+    scheduler_factor: float = 0.5,
+    scheduler_patience: int = 20,
+    min_lr: float = 1e-6,
 ):
     #init the data, the optimizer, params ...
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     optimizer = optimizer(model.parameters(), lr=lr)
+    scheduler = ReduceLROnPlateau(
+        optimizer,
+        mode='min',
+        factor=scheduler_factor,
+        patience=scheduler_patience,
+        min_lr=min_lr,
+    )
     train_errors = []
     val_errors = []
     patience_counter = 0
@@ -143,13 +154,17 @@ def fit(
             val_error = loss_output(ytrue_val, ypred_val)
             val_errors.append(val_error)
 
+        # Step the LR scheduler based on validation error
+        scheduler.step(val_error)
+
         #logging with tqdm
         if verbose:
             pbar.set_postfix({
                 "Train Error": formatter(train_errors[-1]), 
                 "Val Error": formatter(val_errors[-1]),
                 "Patience": patience_counter,
-                "Best Val Error": formatter(torch.min(torch.tensor(val_errors)))
+                "Best Val Error": formatter(torch.min(torch.tensor(val_errors))),
+                "LR": f"{optimizer.param_groups[0]['lr']:.2e}",
                 })
 
         #early stopping
