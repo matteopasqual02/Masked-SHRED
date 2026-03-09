@@ -16,7 +16,7 @@ class SHRED(nn.Module):
         decoder_sizes: list[int] = [350,400],
         dropout: float = 0.0
     ):
-        super(SHRED, self).__init__()
+        super().__init__()
 
         #LSTM encoder
         self.encoder = nn.LSTM(

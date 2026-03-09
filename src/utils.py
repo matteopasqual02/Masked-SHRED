@@ -20,7 +20,9 @@ def rmse(datatrue, datapred):
     return torch.sqrt(mse(datatrue, datapred))
 
 # Convert a probability to a percentage string with two decimal places
-num2p = lambda prob: ("%.2f" % (100*prob)) + "%"
+num2p = lambda prob: ("%.3f" % (100*prob)) + "%"
+# Convert to a numpy nuber
+num2n = lambda num: ("%.4f" % (num)) 
 
 # Dimensionity reduction function using Singular Value Decomposition (SVD)
 def dim_reduction(Xtrain, Xvalid, Xtest, modes):
