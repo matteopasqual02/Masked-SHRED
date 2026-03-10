@@ -96,3 +96,30 @@ def PaddingMask(mask, lag):
                 out[i * ntimes + j - 1] = mask[i, j - lag:j]
 
     return out
+
+def trajectory(
+    yt,         # trajectory with dimension (sequence length, data shape)
+    plot,       # related plot function for a snapshot, which takes as input a snapshot with dimension (data shape) and produces a plot
+    title = None, fontsize = None, figsize = None, axis = False, save = False, name = 'gif'
+    ):
+
+    arrays = []
+    
+    # Loop through each time step in the trajectory,
+    for i in range(yt.shape[0]):
+        plt.figure(figsize = figsize)           # Create a new figure for each time step, with the specified size
+        plot(yt[i])                             # Call the provided plot function to visualize the current time step, which takes as input a snapshot with dimension (data shape) and produces a plot
+        plt.title(title, fontsize = fontsize)   
+        if not axis:
+            plt.axis('off')
+        fig = plt.gcf()
+        display(fig)
+        if save:
+            arrays.append(np.array(fig.canvas.renderer.buffer_rgba()))
+        plt.close()
+        clc(wait=True)
+
+    # If the save flag is set to True, save the generated plots as a GIF file with the specified name, using the imageio library to create the GIF from the list of arrays representing each frame of the animation
+    if save:
+        imageio.mimsave(name.replace(".gif", "") + ".gif", arrays)
+        
