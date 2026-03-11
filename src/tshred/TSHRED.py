@@ -7,6 +7,7 @@ from tqdm import tqdm                       #type: ignore
 from torch.optim.lr_scheduler import ReduceLROnPlateau      #type: ignore
 
 from .transformer import Transformer
+from .xlstm.xlstm import XLSTM
 from .sdn import MLP, CNN
 from ..utils import num2p, mre, mse
 
@@ -34,6 +35,13 @@ class TSHRED(nn.Module):
                 layer_norm_eps=1e-5,
                 bias=True,
                 device=args.device,
+            )
+        elif args.encoder == "xlstm":
+            self.encoder = XLSTM(
+                input_size=args.input_size,
+                hidden_size=args.hidden_size,
+                num_layers=args.encoder_depth,
+                type=args.xlstm_type,
             )
         else:
             raise NotImplementedError(f"Encoder {args.encoder} not implemented")
