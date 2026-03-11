@@ -27,7 +27,7 @@ class XLSTM(nn.Module):
         else:
             raise ValueError(f"Unsupported type: {type}")
         
-    def forward(self, x):
+    def forward(self, x, **kwargs):
 
         #pass the input through the xlstm model and return the output
         output = self.model(x)  # (batch_size, seq_len, hidden_size)
