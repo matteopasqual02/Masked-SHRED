@@ -162,7 +162,6 @@ class DataManager:
 
         return train_dataset, val_dataset, test_dataset
 
-
 # TimeseriesDataset
 class TimeSeriesDataset(torch.utils.data.Dataset):
 
@@ -182,7 +181,7 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
 
 # utility function
 
-def parse_compress(compress: Union[None, bool, int]):
+def parse_compress(compress):
     # normalize the compress parameter to an integer number of components to keep
     if compress is None or compress is False:
         return 0
@@ -192,7 +191,7 @@ def parse_compress(compress: Union[None, bool, int]):
         return compress
     raise ValueError("compress must be None, False, True, or a non-negative integer")
 
-def get_data_npz(file_path: str):
+def get_data_npz(file_path):
     # load data from a .npz file
     data = np.load(file_path)
     if len(data.files) == 0:
@@ -201,7 +200,7 @@ def get_data_npz(file_path: str):
         print(f"Warning: Multiple arrays found in {file_path}. Only the first array will be used.")
     return data[data.files[0]]
 
-def get_data_npy(file_path: str):
+def get_data_npy(file_path):
     # load data from a .npy file
     return np.load(file_path)
     
