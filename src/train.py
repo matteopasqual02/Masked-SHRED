@@ -3,15 +3,11 @@ import torch                                    #type: ignore
 from torch.utils.data import DataLoader         #type: ignore
 from tqdm import tqdm                           #type: ignore
 
-from .shred.SHRED import SHRED
-from .shred.SHRED_GRUD import SHRED_GRUD
-from .tshred.TSHRED import TSHRED
+from .mSHRED.mSRED import mSHRED
 
-
-ModelType = Union[SHRED, SHRED_GRUD, TSHRED]
 
 def fit(
-    model: ModelType,
+    model: mSHRED,
     train_dataset: torch.utils.data.Dataset,
     val_dataset: torch.utils.data.Dataset,
     batch_size: int = 64,
@@ -151,7 +147,7 @@ def fit(
 
 
 def evaluate(
-    model: ModelType,
+    model: mSHRED,
     dataset: torch.utils.data.Dataset,
     batch_size: int = 64,
     loss_fn = torch.nn.MSELoss(reduction='sum'),

@@ -6,12 +6,11 @@ import pandas as pd                                 #type: ignore
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score   #type: ignore
 
 from src.datamanager import DataManager, generate_lagged_sensor_measurements         
-from src.shred.SHRED import SHRED
-from src.tshred.TSHRED import TSHRED
+from src.mSHRED.mSRED import mSHRED
 
 class SHREDEngine:
 
-    def __init__(self, datamanager:DataManager, model: Union[SHRED, TSHRED]):
+    def __init__(self, datamanager:DataManager, model: mSHRED):
         # initialize the SHRED engine with a data manager and a trained model
         self.dm = datamanager
         self.model = model
