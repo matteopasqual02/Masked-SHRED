@@ -127,7 +127,7 @@ class DataManager:
         else:
             self.data = np.hstack((self.data, data))
 
-    def prepare(self):
+    def prepare(self, verbose = False):
 
         sc = MinMaxScaler()
         sc.fit(self.data[self.train_indices])
@@ -154,6 +154,12 @@ class DataManager:
 
         Xtest = torch.tensor(lagged_sensor_measurements[self.test_indices], dtype=torch.float32, device=device)
         Ytest = torch.tensor(scaled_data[self.test_indices], dtype=torch.float32, device=device)
+
+        if verbose:
+            print(f"Data shapes after preparation:")
+            print(f"Train:\t {Xtrain.shape} -> {Ytrain.shape}")
+            print(f"Val:\t {Xval.shape} -> {Yval.shape}")
+            print(f"Test:\t {Xtest.shape} -> {Ytest.shape}")   
 
         # return datasets
         train_dataset = TimeSeriesDataset(Xtrain, Ytrain)
