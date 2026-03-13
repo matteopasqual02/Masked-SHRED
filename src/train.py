@@ -18,6 +18,11 @@ def fit(
     num_epochs: int = 200,
     lr: float = 1e-3,
     optimizer: str = 'AdamW',
+    lr_scheduler: Optional[str] = None,
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.2,
+    scheduler_embed_dim: Optional[int] = None,
+    scheduler_warmup_steps: Optional[int] = None,
     weight_decay: float = 0.01,
     patience: int = 20,
     verbose: bool = True
@@ -30,10 +35,20 @@ def fit(
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
-    # criterion and optimizer
+    # criterion, optimizer, and scheduler
     criterion = torch.nn.MSELoss()          # used for backward pass
     val_criterion = torch.nn.MSELoss(reduction='sum')
     optimizer = _get_optimizer(model.parameters(), optimizer, lr, weight_decay)
+    scheduler = None
+    if lr_scheduler is not None:
+        scheduler = _get_lr_scheduler(
+            optimizer=optimizer,
+            scheduler=lr_scheduler,
+            step_size=scheduler_step_size,
+            gamma=scheduler_gamma,
+            embed_dim=scheduler_embed_dim,
+            warmup_steps=scheduler_warmup_steps,
+        )
 
     # error lists
     train_losses = []
@@ -57,6 +72,12 @@ def fit(
             loss = criterion(outputs, Y)    #compute the loss
             loss.backward()                 #backward pass
             optimizer.step()                #optimizer step
+
+            # transformer scheduler step (if applicable, step once per optimizer step)
+            # NOTE: for the "Transformer" scheduler, we step once per optimizer step, 
+            # so we only step here if it's the "Transformer" scheduler
+            if scheduler is not None and lr_scheduler == "Transformer":
+                scheduler.step()
 
         #evaluate on training and validation sets (both in eval mode for consistency)
         model.eval()
@@ -86,13 +107,20 @@ def fit(
             val_loss = val_loss / val_elements  # average loss over all elements
             val_losses.append(val_loss)
 
+        # step the learning rate scheduler 
+        # NOTE: for the "Transformer" scheduler, we step once per optimizer step, 
+        # so we only step here if it's not the "Transformer" scheduler
+        if scheduler is not None and lr_scheduler != "Transformer":
+            scheduler.step()
+
         #logging with tqdm
         if verbose:
             pbar.set_postfix({
                 "Train Loss": f"{train_loss:.4f}", 
                 "Val Loss": f"{val_loss:.4f}",
                 "Patience": patience_counter,
-                "Best Val Loss": f"{best_val_loss:.4f}"
+                "Best Val Loss": f"{best_val_loss:.4f}",
+                "LR": f"{optimizer.param_groups[0]['lr']:.2e}"
                 })
     
         #early stopping
@@ -159,17 +187,57 @@ def evaluate(
     return mse, mre
 
 def _get_optimizer(params, optimizer: str, lr: float, weight_decay: float):
+
     if optimizer == "AdamW":
         return torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
+    
     elif optimizer == "Adam":
         return torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
+    
     elif optimizer == "SGD":
         return torch.optim.SGD(params, lr=lr, weight_decay=weight_decay, momentum=0.9)
+    
     elif optimizer == "RMSprop":
         return torch.optim.RMSprop(params, lr=lr, weight_decay=weight_decay)
+    
     elif optimizer == "Adagrad":
         return torch.optim.Adagrad(params, lr=lr, weight_decay=weight_decay)
+    
     else:
         raise ValueError(
             f"Unsupported optimizer: {optimizer}. Supported optimizers are: AdamW, Adam, SGD, RMSprop, Adagrad."
         )
+    
+def _get_lr_scheduler(
+    optimizer,
+    scheduler: str,
+    step_size: int = 10,
+    gamma: float = 0.1,
+    embed_dim: Optional[int] = None,
+    warmup_steps: Optional[int] = None,
+):
+    
+    if scheduler in {"Classical", "StepLR"}:
+        return torch.optim.lr_scheduler.StepLR(optimizer, step_size=step_size, gamma=gamma)
+    
+    elif scheduler == "ExponentialLR":
+        return torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=gamma)
+    
+    elif scheduler == "CosineAnnealingLR":
+        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=step_size)
+    
+    elif scheduler == "Transformer":
+        if embed_dim is None or warmup_steps is None:
+            raise ValueError("'Transformer' scheduler requires 'embed_dim' and 'warmup_steps'.")
+        if warmup_steps <= 0:
+            raise ValueError("'warmup_steps' must be > 0 for Transformer scheduler.")
+
+        def warmup_lr_lambda(step: int) -> float:
+            step = max(step, 1)
+            return (embed_dim ** -0.5) * min(step ** -0.5, step * warmup_steps ** -1.5)
+
+        # Step-based schedule: call scheduler.step() once per optimizer step.
+        return torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=warmup_lr_lambda)
+    
+    else:
+        raise ValueError("Unsupported scheduler: {scheduler}. ")
