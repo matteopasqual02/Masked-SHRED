@@ -4,7 +4,7 @@ from torch.utils.data import DataLoader # type: ignore
 from tqdm import tqdm                   # type: ignore
 from torch.optim.lr_scheduler import ReduceLROnPlateau      # type: ignore
 
-from ..utils import mae, mse, mre, num2p
+from ..old.utils import mae, mse, mre, num2p
 from .GRUD import GRUD
 from .AttnGRUD import AttnGRUD
 

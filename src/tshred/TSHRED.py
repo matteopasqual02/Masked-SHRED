@@ -9,7 +9,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau      #type: ignore
 from .transformer import Transformer
 from .xlstm.xlstm import XLSTM
 from .sdn import MLP, CNN
-from ..utils import num2p, mre, mse
+from ..old.utils import num2p, mre, mse
 
 class TSHRED(nn.Module):
 
