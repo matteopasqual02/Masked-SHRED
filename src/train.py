@@ -31,7 +31,7 @@ def fit(
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # criterion and optimizer
-    criterion = torch.nn.MSELoss()
+    criterion = torch.nn.MSELoss()          # used for backward pass
     val_criterion = torch.nn.MSELoss(reduction='sum')
     optimizer = _get_optimizer(model.parameters(), optimizer, lr, weight_decay)
 
@@ -51,21 +51,28 @@ def fit(
 
         #train
         model.train()
-        train_loss = 0.0
         for X, Y in train_loader:
             outputs = model(X)              #forward pass
             optimizer.zero_grad()           #zero the gradients
             loss = criterion(outputs, Y)    #compute the loss
             loss.backward()                 #backward pass
             optimizer.step()                #optimizer step
-            train_loss += loss.item()       # accumulate the loss
 
-        train_loss = train_loss / len(train_loader)  # average loss over batches
-        train_losses.append(train_loss)
-
-        #evaluate on training and validation sets
+        #evaluate on training and validation sets (both in eval mode for consistency)
         model.eval()
         with torch.no_grad():
+
+            #train error
+            train_loss = 0.0
+            train_elements = 0
+            for X, Y in train_loader:
+                outputs = model(X)                  #forward pass
+                loss = val_criterion(outputs, Y)    #compute the loss
+                train_loss += loss.item()           # accumulate the loss
+                train_elements += Y.numel()         # accumulate the number of elements
+                
+            train_loss = train_loss / train_elements  # average loss over all elements
+            train_losses.append(train_loss)
 
             #val error
             val_loss = 0.0
