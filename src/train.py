@@ -126,7 +126,8 @@ def evaluate(
     model: ModelType,
     dataset: torch.utils.data.Dataset,
     batch_size: int = 64,
-    loss_fn = torch.nn.MSELoss(reduction='sum')
+    loss_fn = torch.nn.MSELoss(reduction='sum'),
+    eps: float = 1e-12,
 ):
     
     #evaluate the model on the given dataset and return the error
@@ -134,6 +135,8 @@ def evaluate(
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     total_loss = 0.0
     total_elements = 0
+    total_mre = 0.0
+    total_mre_elements = 0
 
     with torch.no_grad():
         for X, Y in dataloader:
@@ -142,9 +145,18 @@ def evaluate(
             total_loss += loss.item()           # accumulate the loss
             total_elements += Y.numel()         # accumulate the number of elements
 
+            # Mean Relative Error over the last axis, averaged over all remaining axes.
+            numerator = (Y - outputs).pow(2).sum(dim=-1).sqrt()         # compute the numerator of the relative error
+            denominator = Y.pow(2).sum(dim=-1).sqrt().clamp_min(eps)    # compute the denominator of the relative error, with a small epsilon to avoid division by zero
+            rel_error = numerator / denominator                         # compute the relative error
+            total_mre += rel_error.sum().item()                         # accumulate the relative error
+            total_mre_elements += rel_error.numel()                     # accumulate the number of elements for the relative error
+
     # compute the mean loss over all elements
     mse = total_loss / total_elements
-    return mse
+    mre = total_mre / total_mre_elements
+
+    return mse, mre
 
 def _get_optimizer(params, optimizer: str, lr: float, weight_decay: float):
     if optimizer == "AdamW":
