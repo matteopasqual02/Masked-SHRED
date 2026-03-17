@@ -58,7 +58,7 @@ def get_altimetry_obs(quality=None):
         altlist.append(o)
     return altlist
 
-def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, items=None, cmaps=None):
+def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, items=None, cmaps=None, title_suffix=""):
     
     # Set default items and colormaps if not provided
     if items is None:
@@ -87,16 +87,35 @@ def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, ite
         for i, item in enumerate(items)
     ])
     ds_error = mikeio.Dataset([
-        mikeio.DataArray(data=np.abs(ds[item].sel(time=times_test).values - ds_shred[item].values),
-        time=times_test, item=ds.items[i], geometry=geom)
+        mikeio.DataArray(
+            data=np.sqrt((ds[item].sel(time=times_test).values - ds_shred[item].values) ** 2),
+            time=times_test,
+            item=ds.items[i],
+            geometry=geom,
+        )
         for i, item in enumerate(items)
     ])
+
+    metrics = {}
+    for item in items:
+        target = ds[item].sel(time=times_test).values
+        error = target - ds_shred[item].values
+        mse = np.nanmean(error ** 2)
+
+        # Mean Relative Error: ||target - prediction|| / ||target|| over last axis,
+        # then averaged over all remaining axes.
+        eps = 1e-12
+        numerator = np.sqrt(np.nansum((target - ds_shred[item].values) ** 2, axis=-1))
+        denominator = np.sqrt(np.nansum(target ** 2, axis=-1))
+        rel_error = numerator / np.maximum(denominator, eps)
+        mre = np.nanmean(rel_error)
+        metrics[item] = {"mse": mse, "mre": mre}
 
     # Plotting
     if plot_time is None:
         plot_time = ds_shred.time[-1]
 
-    fig, axs = plt.subplots(len(items), 3, figsize=(15, 10))
+    fig, axs = plt.subplots(len(items), 3, figsize=(15, 11))
     for row, item in enumerate(items):
         reference  = ds[item].sel(time=plot_time)
         prediction = ds_shred[item].sel(time=plot_time)
@@ -107,9 +126,21 @@ def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, ite
 
         reference.plot( ax=axs[row, 0], title=item,    cmap=cmaps[item], vmin=vmin, vmax=vmax)
         prediction.plot(ax=axs[row, 1], title="SHRED", cmap=cmaps[item], vmin=vmin, vmax=vmax)
-        error.plot(     ax=axs[row, 2], title="Error", cmap="gray")
+        error.plot(
+            ax=axs[row, 2],
+            title=f"Error\nMSE={metrics[item]['mse']:.6f}\nMRE={metrics[item]['mre']:.6f}",
+            cmap="gray",
+        )
 
     plt.tight_layout()
+
+    # Save each figure to Notebooks/HYDRO/outputs.
+    output_dir = Path(__file__).resolve().parent / "outputs"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = output_dir / f"shred_{title_suffix}.png"
+    fig.savefig(output_path, dpi=200, bbox_inches="tight")
+    print(f"Saved plot: {output_path}")
+
     plt.show()
 
     return ds_shred, ds_error

@@ -6,6 +6,8 @@ from itertools import count                         #type: ignore
 from sklearn.preprocessing import MinMaxScaler, StandardScaler  #type: ignore
 from sklearn.utils.extmath import randomized_svd                #type: ignore
 
+from .utils import median_imputer_single_dataset, mean_imputer_single_dataset, last_value_imputer_single_dataset
+
 DEFAULT_MODES = 50
 DataInput = Union[
     str,                # .npy/.npz file path
@@ -65,7 +67,8 @@ class DataManager:
         mobile: Optional[Union[List[Tuple], List[List[Tuple]]]] = None, # coordinates of mobile sensors (if None, use random sensors)
         measurements: Optional[np.ndarray] = None,                      # sensor measurements (if None, will be loaded from data)
         compress: Union[None, bool, int] = True,                        # whether to apply SVD compression to the data (if True, compress to x components; if None or False, do not compress)
-        seed: Optional[int] = None                                      # random seed for reproducibility (if None, no seed is set)
+        seed: Optional[int] = None,                                     # random seed for reproducibility (if None, no seed is set)
+        imputer: Optional[str] = None                                   # imputation strategy to apply to the provided measurements (if None, no imputation is applied; if 'median', median imputation is applied using the training data)
     ):
         
         # check that the id is unique
@@ -82,7 +85,10 @@ class DataManager:
         self.test_indices = self.test_indices if self.test_indices is not None else np.arange(int(len(data) * (self.train_size + self.val_size)), len(data))
 
         # sensor dict
-        sensors_dict = get_sensor_measurements(data, id, self._sensor_number, random, stationary, mobile, measurements, seed)
+        sensors_dict = get_sensor_measurements(
+            data, id, self._sensor_number, random, stationary, mobile, measurements, seed,
+            train_indices = self.train_indices, imputer=imputer
+        )
         new_sensor_summary_df = sensors_dict['sensor_summary']
         new_sensor_measurements_df = sensors_dict['sensor_measurements_df']
         new_sensor_measurements = sensors_dict['sensor_measurements']
@@ -244,7 +250,18 @@ def generate_random_sensor_locations(data, num_sensors, seed):
         sensor_locations.append(tuple(reversed(sensor_location)))
     return sensor_locations
 
-def get_sensor_measurements(data, id, sensor_number, random, stationary, mobile, measurements, seed):
+def get_sensor_measurements(
+    data, 
+    id, 
+    sensor_number, 
+    random, 
+    stationary, 
+    mobile, 
+    measurements, 
+    seed,
+    train_indices = None,
+    imputer: str = None
+    ):
     
     sensor_summary = []
     sensor_measurements = []
@@ -293,7 +310,21 @@ def get_sensor_measurements(data, id, sensor_number, random, stationary, mobile,
             raise ValueError("measurements must be a numpy array or torch tensor of shape (time, num_sensors)")
         if measurements.shape[0] != data.shape[0]:
             raise ValueError("measurements must have the same number of time steps as the data")
+
+        if imputer is not None:
+            if train_indices is None:
+                raise ValueError("train_indices must be provided for median imputation")
+            if imputer == 'median':
+                measurements = median_imputer_single_dataset(measurements, train_indices)
+            elif imputer == 'mean':
+                measurements = mean_imputer_single_dataset(measurements, train_indices)
+            elif imputer == 'last_value':
+                measurements = last_value_imputer_single_dataset(measurements, train_indices)
+            else:
+                raise ValueError("Unsupported imputation strategy. Supported strategies are 'median', 'mean', and 'last_value'.")            
+        
         measurements = measurements.T  # transpose to get shape (num_sensors, time)
+
         for row in measurements:
             sensor_summary.append([id, next(sensor_number), 'provided', None])
             sensor_measurements.append(row)
