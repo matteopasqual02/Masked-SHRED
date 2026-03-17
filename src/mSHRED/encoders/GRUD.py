@@ -145,7 +145,8 @@ class GRUD(nn.Module):
             return Variable(torch.zeros(batch_size, self.hidden_size).cuda())
         else:
             return Variable(torch.zeros(batch_size, self.hidden_size))
-        
+
+    """   
     def forward(self, input):
         
         #sizes
@@ -188,5 +189,67 @@ class GRUD(nn.Module):
             assert outputs.dim() == 2, "Expected output shape (batch_size, hidden_size), got {}".format(outputs.shape)
 
             return outputs[:,-1,:]
+        else:
+            return outputs
+    """
+
+    def forward(self, input):
+
+        #sizes (batch_size, step_size, sensor_size)
+        batch_size = input.size(0)
+        step_size = input.size(1)
+        sensor_size = input.size(2)
+
+        #initialize the hidden state of the GRU cell with zeros
+        Hidden_State = self.initHidden(batch_size)
+        
+        #create the input tensors for the step function
+        nan_mask = torch.isnan(input)
+
+        #x is the input with nan values replaced by zeros
+        X = torch.where(nan_mask, torch.zeros_like(input), input)
+
+        #mask is a binary tensor that indicates the presence of observed values in the input
+        Mask = (~nan_mask).to(input.dtype)
+
+        #build per-time indices and track the latest observed time with a cumulative max
+        time_idx = torch.arange(step_size, device=input.device, dtype=torch.long)
+        time_idx = time_idx.view(1, step_size, 1).expand(batch_size, step_size, sensor_size)
+        obs_time = torch.where(nan_mask, torch.full_like(time_idx, -1), time_idx)
+        last_obs_idx = obs_time.cummax(dim=1).values
+
+        #x_last_obsv is each feature value forward-filled from the last observation (or zero initially)
+        gather_idx = last_obs_idx.clamp(min=0)
+        X_last_obsv = torch.gather(X, dim=1, index=gather_idx)
+
+        #delta is the time since the last observation for each sensor
+        Delta = (time_idx - gather_idx).to(input.dtype)
+
+        #iterate over the time steps and apply the GRU cell to each time step
+        outputs = None
+        for i in range(step_size):
+
+            #call the step function to compute the hidden state for the current time step
+            Hidden_State = self.step(
+                torch.squeeze(X[:,i:i+1,:]),
+                torch.squeeze(X_last_obsv[:,i:i+1,:]),
+                torch.squeeze(self.X_mean[:,i:i+1,:]),
+                Hidden_State,
+                torch.squeeze(Mask[:,i:i+1,:]),
+                torch.squeeze(Delta[:,i:i+1,:])
+            )
+
+            if outputs is None:
+                outputs = Hidden_State.unsqueeze(1)
+            else:
+                outputs = torch.cat((outputs, Hidden_State.unsqueeze(1)), dim=1)
+
+        #if i want to output only the last hidden state, I return outputs[:,-1,:]
+        #otherwise I return all the hidden statesif self.output_last:
+        if self.output_last:
+
+            assert outputs.dim() == 2, "Expected output shape (batch_size, hidden_size), got {}".format(outputs.shape)
+            return outputs[:,-1,:]
+        
         else:
             return outputs

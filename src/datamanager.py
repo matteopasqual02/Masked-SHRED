@@ -5,6 +5,7 @@ import pandas as pd                                 #type: ignore
 from itertools import count                         #type: ignore   
 from sklearn.preprocessing import MinMaxScaler, StandardScaler  #type: ignore
 from sklearn.utils.extmath import randomized_svd                #type: ignore
+import matplotlib.pyplot as plt                     #type: ignore
 
 from .utils import median_imputer_single_dataset, mean_imputer_single_dataset, last_value_imputer_single_dataset
 
@@ -68,7 +69,8 @@ class DataManager:
         measurements: Optional[np.ndarray] = None,                      # sensor measurements (if None, will be loaded from data)
         compress: Union[None, bool, int] = True,                        # whether to apply SVD compression to the data (if True, compress to x components; if None or False, do not compress)
         seed: Optional[int] = None,                                     # random seed for reproducibility (if None, no seed is set)
-        imputer: Optional[str] = None                                   # imputation strategy to apply to the provided measurements (if None, no imputation is applied; if 'median', median imputation is applied using the training data)
+        imputer: Optional[str] = None,                                  # imputation strategy to apply to the provided measurements (if None, no imputation is applied; if 'median', median imputation is applied using the training data)
+        verbose: bool = False
     ):
         
         # check that the id is unique
@@ -100,7 +102,20 @@ class DataManager:
             sc.fit(data[self.train_indices])
             data = sc.transform(data)
             U, S, Vt = randomized_svd(data[self.train_indices], n_components=modes, n_iter='auto')
+
+            #plot singular values decay
+            reconstruction = U @ np.diag(S) @ Vt
+            residual_energy = np.linalg.norm(data[self.train_indices] - reconstruction) ** 2 \
+                            / np.linalg.norm(data[self.train_indices]) ** 2
+
             data = data @ Vt.T
+
+            if verbose:
+                plt.plot(S[:modes], color = 'magenta', linewidth = 2)
+                plt.title("Singular Values Decay \n")
+                plt.show()
+            
+            print(f"Residual energy of {id} after keeping {modes} modes: {residual_energy:.4f}")
 
         # commit to self
         self._dataset_ids.append(id)
@@ -162,7 +177,7 @@ class DataManager:
         Ytest = torch.tensor(scaled_data[self.test_indices], dtype=torch.float32, device=device)
 
         if verbose:
-            print(f"Data shapes after preparation:")
+            print(f"\n Data shapes after preparation:")
             print(f"Train:\t {Xtrain.shape} -> {Ytrain.shape}")
             print(f"Val:\t {Xval.shape} -> {Yval.shape}")
             print(f"Test:\t {Xtest.shape} -> {Ytest.shape}")   
@@ -321,7 +336,9 @@ def get_sensor_measurements(
             elif imputer == 'last_value':
                 measurements = last_value_imputer_single_dataset(measurements, train_indices)
             else:
-                raise ValueError("Unsupported imputation strategy. Supported strategies are 'median', 'mean', and 'last_value'.")            
+                raise ValueError("Unsupported imputation strategy. Supported strategies are 'median', 'mean', and 'last_value'.")      
+
+        print("Nuber of nan values in measurements after imputation:", np.isnan(measurements).sum(),"\n")      
         
         measurements = measurements.T  # transpose to get shape (num_sensors, time)
 
