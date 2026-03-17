@@ -7,7 +7,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler  #type: ignore
 from sklearn.utils.extmath import randomized_svd                #type: ignore
 import matplotlib.pyplot as plt                     #type: ignore
 
-from .utils import median_imputer_single_dataset, mean_imputer_single_dataset, last_value_imputer_single_dataset
+from .utils import median_imputer_single_dataset, mean_imputer_single_dataset, last_value_imputer_single_dataset, generate_GRUD_4D_input
 
 DEFAULT_MODES = 50
 DataInput = Union[
@@ -148,7 +148,7 @@ class DataManager:
         else:
             self.data = np.hstack((self.data, data))
 
-    def prepare(self, verbose = False):
+    def prepare(self, verbose = False, masking_type = None):
 
         sc = MinMaxScaler()
         sc.fit(self.data[self.train_indices])
@@ -162,7 +162,16 @@ class DataManager:
         sc.fit(self.sensor_measurements[self.train_indices])
         self.sensor_scaler = sc
         scaled_sensor_measurements = sc.transform(self.sensor_measurements)
-        lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
+
+        if masking_type is not None:
+            if masking_type == 'grud':
+                scaled_sensor_measurements = generate_GRUD_4D_input(scaled_sensor_measurements)
+                lagged_sensor_measurements = generate_GRUD_4D_lags(scaled_sensor_measurements, self.lags)
+            else:
+                raise ValueError("Unsupported masking type. Supported types are 'random'.")
+
+        else:
+            lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -186,6 +195,11 @@ class DataManager:
         train_dataset = TimeSeriesDataset(Xtrain, Ytrain)
         val_dataset = TimeSeriesDataset(Xval, Yval)
         test_dataset = TimeSeriesDataset(Xtest, Ytest)
+
+        Xtrain_mean = Xtrain.mean(dim=0, keepdim=True)
+
+        if masking_type is not None and masking_type == 'grud':
+            return train_dataset, val_dataset, test_dataset, Xtrain_mean
 
         return train_dataset, val_dataset, test_dataset
 
@@ -379,4 +393,17 @@ def generate_lagged_sensor_measurements(sensor_measurements, lags):
     lagged_sequences = np.empty((num_timesteps, lags, num_sensors))
     for i in range(lagged_sequences.shape[0]):
         lagged_sequences[i] = sensor_measurements[i:i+lags, :]
+    return lagged_sequences
+
+def generate_GRUD_4D_lags(sensor_measurements, lags):
+    # generate lagged features for GRUD, which expects a 4D input of shape (N, channels, lags, num_sensors)
+    
+    channels, num_timesteps, num_sensors = sensor_measurements.shape
+
+    #concatenate zeros to the beginning of the sensor measurements along the temporal axis to create lagged features
+    sensor_measurements = np.concatenate((np.zeros((channels, lags, num_sensors)), sensor_measurements), axis=1)
+    lagged_sequences = np.empty((num_timesteps, channels, lags, num_sensors))
+    for i in range(num_timesteps):
+        # sensor_measurements[:,i:i+lags,:] has shape (channels, lags, num_sensors)
+        lagged_sequences[i,:,:,:] = sensor_measurements[:,i:i+lags,:]
     return lagged_sequences

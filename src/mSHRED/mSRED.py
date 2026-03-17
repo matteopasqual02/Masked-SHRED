@@ -48,8 +48,8 @@ class mSHRED(nn.Module):
             from .encoders.GRUD import GRUD
             self.encoder = GRUD(
                 input_size=args.input_size,
+                cell_size=args.input_size,
                 hidden_size=args.hidden_size,
-                num_layers=args.num_layers,
                 X_mean=args.X_mean,
                 output_last=True,
             )

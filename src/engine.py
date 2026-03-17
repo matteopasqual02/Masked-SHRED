@@ -5,8 +5,9 @@ import pandas as pd                                 #type: ignore
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score   #type: ignore
 
-from src.datamanager import DataManager, generate_lagged_sensor_measurements         
+from src.datamanager import DataManager, generate_lagged_sensor_measurements, generate_GRUD_4D_lags
 from src.mSHRED.mSRED import mSHRED
+from src.utils import generate_GRUD_4D_input
 
 class SHREDEngine:
 
@@ -33,9 +34,15 @@ class SHREDEngine:
         # 2) Scale using the DataManager's fitted scaler (shape -> (T, n_sensors))
         scaled_sensor_measurements = self.dm.sensor_scaler.transform(sensor_measurements)  
         
-        # 3) Build lagged windows (shape -> (T, lags, n_sensors))
+        # 3) Build lagged windows based on encoder type.
+        # Standard encoders expect (T, lags, n_sensors), while GRUD expects (T, 4, lags, n_sensors).
         lags = self.dm.lags
-        lagged = generate_lagged_sensor_measurements(scaled_sensor_measurements, lags)
+        encoder_name = self.model.encoder.__class__.__name__.lower()
+        if encoder_name == "grud":
+            grud_input = generate_GRUD_4D_input(scaled_sensor_measurements)
+            lagged = generate_GRUD_4D_lags(grud_input, lags)
+        else:
+            lagged = generate_lagged_sensor_measurements(scaled_sensor_measurements, lags)
         
         # 4) To torch on same device as model:
         device = "cuda" if torch.cuda.is_available() else "cpu"

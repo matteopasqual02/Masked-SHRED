@@ -65,3 +65,37 @@ def last_value_imputer_single_dataset(X, train_idx):
             ts[idx] = 0.0 if idx == 0 else ts[idx - 1]      # replace NaN with last observed value (or 0.0 if it's the first value)
 
     return X_imputed
+
+def generate_GRUD_4D_input(measurements):
+    # generate a 4D input tensor for GRUD from the original measurements
+    # input shape: (T, n_sensors)
+    # output shape: (T, 4, n_sensors) where the 4 channels are [X, X_last_obsv, Mask, Delta]
+
+    measurements = np.asarray(measurements)
+    T, n_sensors = measurements.shape
+    Mask = (~np.isnan(measurements)).astype(float)                  # Mask indicating observed values (1.0 for observed, 0.0 for missing)
+    X = np.nan_to_num(measurements, nan=0.0).astype(np.float32)     # Original measurements with NaNs replaced by 0.0
+
+    X_last_obsv = np.zeros_like(X)                                  # To store the last observed value for each sensor
+    Delta = np.zeros_like(X)                                        # To store the time since last observation for each sensor
+
+    # Iterate through each sensor 
+    for sensor_idx in range(n_sensors):
+        last_value = 0.0
+        time_since_last_obs = 0.0
+
+        # Iterate through time steps for the current sensor
+        for t in range(T):
+            if Mask[t, sensor_idx] == 1.0:          # If the value is observed
+                last_value = X[t, sensor_idx]       # Update last observed value
+                time_since_last_obs = 0.0           # Reset time since last observation
+            else:
+                time_since_last_obs += 1.0          # Increment time since last observation
+
+            X_last_obsv[t, sensor_idx] = last_value         # Store the last observed value
+            Delta[t, sensor_idx] = time_since_last_obs      # Store the time since last observation
+
+    # stack the channels to create a 4D tensor of shape (4, T, n_sensors)
+    GRUD_input = np.stack((X, X_last_obsv, Mask, Delta), axis=0)
+
+    return GRUD_input
