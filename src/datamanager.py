@@ -111,11 +111,11 @@ class DataManager:
             data = data @ Vt.T
 
             if verbose:
-                plt.plot(S[:modes], color = 'magenta', linewidth = 2)
+                plt.semilogy(S[:modes], color = 'magenta', linewidth = 2)
                 plt.title("Singular Values Decay \n")
                 plt.show()
             
-            print(f"Residual energy of {id} after keeping {modes} modes: {residual_energy:.4f}")
+            print(f"Residual energy of {id} after keeping {modes} modes: {residual_energy*100:.4f} %")
 
         # commit to self
         self._dataset_ids.append(id)
