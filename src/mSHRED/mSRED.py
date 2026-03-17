@@ -50,6 +50,8 @@ class mSHRED(nn.Module):
                 input_size=args.input_size,
                 hidden_size=args.hidden_size,
                 num_layers=args.num_layers,
+                X_mean=args.X_mean,
+                output_last=True,
             )
         elif args.encoder == "attnGRUD":   
             from .encoders.attnGRUD import attnGRUD
