@@ -223,7 +223,7 @@ class AttnGRUD(nn.Module):
             Hidden_State = self.step(
                 torch.squeeze(X[:,i:i+1,:]),
                 torch.squeeze(X_last_obsv[:,i:i+1,:]),
-                torch.squeeze(self.X_mean[:,i:i+1,:]),
+                self.X_mean[:, 0, i, :],
                 Hidden_State,
                 torch.squeeze(Mask[:,i:i+1,:]),
                 torch.squeeze(Delta[:,i:i+1,:])
@@ -238,6 +238,8 @@ class AttnGRUD(nn.Module):
         #otherwise I return all the hidden states
 
         if self.output_last:
-            return outputs[:,-1,:]
+            outputs = outputs[:,-1,:]
+            assert outputs.dim() == 2, "Expected output shape (batch_size, hidden_size), got {}".format(outputs.shape)
+            return outputs
         else:
             return outputs

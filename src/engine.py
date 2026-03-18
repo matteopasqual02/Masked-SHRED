@@ -38,7 +38,7 @@ class SHREDEngine:
         # Standard encoders expect (T, lags, n_sensors), while GRUD expects (T, 4, lags, n_sensors).
         lags = self.dm.lags
         encoder_name = self.model.encoder.__class__.__name__.lower()
-        if encoder_name == "grud":
+        if encoder_name in {"grud", "attngrud"}:
             grud_input = generate_GRUD_4D_input(scaled_sensor_measurements)
             lagged = generate_GRUD_4D_lags(grud_input, lags)
         else:

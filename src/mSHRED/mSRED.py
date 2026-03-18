@@ -54,11 +54,11 @@ class mSHRED(nn.Module):
                 output_last=True,
             )
         elif args.encoder == "att_grud":   
-            from .encoders.attnGRUD import attnGRUD
-            self.encoder = attnGRUD(
+            from .encoders.attnGRUD import AttnGRUD
+            self.encoder = AttnGRUD(
                 input_size=args.input_size,
-                cell_size=args.hidden_size,
-                hidden_size=args.num_layers,
+                cell_size=args.input_size,
+                hidden_size=args.hidden_size,
                 X_mean=args.X_mean,
                 output_last=True,
             )
