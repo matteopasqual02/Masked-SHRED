@@ -53,12 +53,14 @@ class mSHRED(nn.Module):
                 X_mean=args.X_mean,
                 output_last=True,
             )
-        elif args.encoder == "attnGRUD":   
+        elif args.encoder == "att_grud":   
             from .encoders.attnGRUD import attnGRUD
             self.encoder = attnGRUD(
                 input_size=args.input_size,
-                hidden_size=args.hidden_size,
-                num_layers=args.num_layers,
+                cell_size=args.hidden_size,
+                hidden_size=args.num_layers,
+                X_mean=args.X_mean,
+                output_last=True,
             )
         else:
             raise NotImplementedError(f"Encoder {args.encoder} not implemented")
