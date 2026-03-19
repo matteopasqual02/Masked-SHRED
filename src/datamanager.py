@@ -149,12 +149,34 @@ class DataManager:
         else:
             self.data = np.hstack((self.data, data))
 
-    def prepare(self, verbose = False, masking_type = None):
+    def prepare(self, verbose = False, masking_type = None, unused_data = None):
 
+        if self.data is None:
+            raise ValueError("No data found. Please add at least one dataset before calling prepare().")
+
+        print(f"\nDatasets: {self._dataset_ids}")
+        if unused_data is not None:
+            print(f"Dataset NOT used: {unused_data}")
+
+            data_blocks = []
+            col_start = 0
+            for ids in self._dataset_ids:
+                col_end = col_start + self._dataset_lengths[ids]
+                if ids not in unused_data:
+                    data_blocks.append(self.data[:, col_start:col_end])
+                col_start = col_end
+
+            if not data_blocks:
+                raise ValueError("All datasets were excluded via unused_data; no output targets remain.")
+
+            data = np.hstack(data_blocks)
+        else:
+            data = self.data
+            
         sc = MinMaxScaler()
-        sc.fit(self.data[self.train_indices])
+        sc.fit(data[self.train_indices])
         self.data_scaler = sc
-        scaled_data = sc.transform(self.data)
+        scaled_data = sc.transform(data)
 
         if self.sensor_measurements is None:
             raise ValueError("No sensor measurements found. Please add at least one dataset with sensor measurements before calling prepare().")
@@ -168,11 +190,11 @@ class DataManager:
             if masking_type == 'grud':
                 scaled_sensor_measurements = generate_GRUD_4D_input(scaled_sensor_measurements)
                 lagged_sensor_measurements = generate_GRUD_4D_lags(scaled_sensor_measurements, self.lags)
-            if masking_type == 'double_channels':
+            elif masking_type == 'double_channels':
                 scaled_sensor_measurements = generate_channels(scaled_sensor_measurements)
                 lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
             else:
-                raise ValueError("Unsupported masking type. Supported types are 'random'.")
+                raise ValueError("Unsupported masking type. Supported types are 'grud' and 'double_channels'.")
 
         else:
             lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
@@ -189,10 +211,10 @@ class DataManager:
         Xtest = torch.tensor(lagged_sensor_measurements[self.test_indices], dtype=torch.float32, device=device)
         Ytest = torch.tensor(scaled_data[self.test_indices], dtype=torch.float32, device=device)
 
-        print("Number of nan values in sensor measurements after masking:", np.isnan(scaled_sensor_measurements).sum())
+        print("\nNumber of nan values in sensor measurements after masking:", np.isnan(scaled_sensor_measurements).sum())
 
         if verbose:
-            print(f"\n Data shapes after preparation:")
+            print(f"\nData shapes after preparation:")
             print(f"Train:\t {Xtrain.shape} -> {Ytrain.shape}")
             print(f"Val:\t {Xval.shape} -> {Yval.shape}")
             print(f"Test:\t {Xtest.shape} -> {Ytest.shape}")   
@@ -358,7 +380,7 @@ def get_sensor_measurements(
             else:
                 raise ValueError("Unsupported imputation strategy. Supported strategies are 'median', 'mean', and 'last_value'.")      
 
-        print("Nuber of nan values in measurements after imputation:", np.isnan(measurements).sum())      
+        print("Nuber of nan values in measurements after imputation:", np.isnan(measurements).sum(), "\n")      
         
         measurements = measurements.T  # transpose to get shape (num_sensors, time)
 
