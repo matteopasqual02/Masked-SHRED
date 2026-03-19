@@ -99,3 +99,32 @@ def generate_GRUD_4D_input(measurements):
     GRUD_input = np.stack((X, X_last_obsv, Mask, Delta), axis=0)
 
     return GRUD_input
+
+def generate_channels(measurements):
+
+    # the input is a matrix (ndata, nsensor) or (ndata, lags, nsenso)
+    # i want to generate (ndata, nsensor*2) or (ndata, lags, nsensor*2) 
+    # the first half of the channels are the original measurements with NaNs replaced by 0.0
+    # the second half are binary masks indicating observed values (1.0 for observed, 0.0 for missing)
+
+    mask = (~np.isnan(measurements)).astype(float)                              # Mask indicating observed values (1.0 for observed, 0.0 for missing)
+    measurements = np.nan_to_num(measurements, nan=0.0).astype(np.float32)      # Original measurements with NaNs replaced by 0.0
+
+    # fill data1 - mask1 - data2 - mask2 - ... for each sensor
+    if measurements.ndim == 2:  # (ndata, nsensor)
+        ndata, nsensor = measurements.shape
+        channels = np.zeros((ndata, nsensor * 2), dtype=np.float32)
+        for i in range(nsensor):
+            channels[:, 2*i] = measurements[:, i]   # data channel
+            channels[:, 2*i + 1] = mask[:, i]       # mask channel
+    elif measurements.ndim == 3:  # (ndata, lags, nsensor)
+        ndata, lags, nsensor = measurements.shape
+        channels = np.zeros((ndata, lags, nsensor * 2), dtype=np.float32)
+        for i in range(nsensor):
+            channels[:, :, 2*i] = measurements[:, :, i]   # data channel
+            channels[:, :, 2*i + 1] = mask[:, :, i]       # mask channel
+    else:
+        raise ValueError("Input measurements must be 2D or 3D array")
+    
+    #return a tensor of shape (ndata, nsensor*2) or (ndata, lags, nsensor*2) where the channels are interleaved as [data1, mask1, data2, mask2, ...]
+    return channels

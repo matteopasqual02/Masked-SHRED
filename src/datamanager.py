@@ -7,7 +7,8 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler  #type: ignore
 from sklearn.utils.extmath import randomized_svd                #type: ignore
 import matplotlib.pyplot as plt                     #type: ignore
 
-from .utils import median_imputer_single_dataset, mean_imputer_single_dataset, last_value_imputer_single_dataset, generate_GRUD_4D_input
+from .utils import median_imputer_single_dataset, mean_imputer_single_dataset, last_value_imputer_single_dataset
+from .utils import generate_GRUD_4D_input, generate_channels
 
 DEFAULT_MODES = 50
 DataInput = Union[
@@ -167,6 +168,9 @@ class DataManager:
             if masking_type == 'grud':
                 scaled_sensor_measurements = generate_GRUD_4D_input(scaled_sensor_measurements)
                 lagged_sensor_measurements = generate_GRUD_4D_lags(scaled_sensor_measurements, self.lags)
+            if masking_type == 'double_channels':
+                scaled_sensor_measurements = generate_channels(scaled_sensor_measurements)
+                lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
             else:
                 raise ValueError("Unsupported masking type. Supported types are 'random'.")
 
@@ -184,6 +188,8 @@ class DataManager:
 
         Xtest = torch.tensor(lagged_sensor_measurements[self.test_indices], dtype=torch.float32, device=device)
         Ytest = torch.tensor(scaled_data[self.test_indices], dtype=torch.float32, device=device)
+
+        print("Number of nan values in sensor measurements after masking:", np.isnan(scaled_sensor_measurements).sum())
 
         if verbose:
             print(f"\n Data shapes after preparation:")
@@ -352,7 +358,7 @@ def get_sensor_measurements(
             else:
                 raise ValueError("Unsupported imputation strategy. Supported strategies are 'median', 'mean', and 'last_value'.")      
 
-        print("Nuber of nan values in measurements after imputation:", np.isnan(measurements).sum(),"\n")      
+        print("Nuber of nan values in measurements after imputation:", np.isnan(measurements).sum())      
         
         measurements = measurements.T  # transpose to get shape (num_sensors, time)
 
