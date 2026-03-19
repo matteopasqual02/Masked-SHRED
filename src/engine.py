@@ -2,12 +2,13 @@ from typing import Union, List, Tuple, Optional     #type: ignore
 import numpy as np                                  #type: ignore
 import torch                                        #type: ignore
 import pandas as pd                                 #type: ignore
+from torch.utils.data import Dataset                #type: ignore
 
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score   #type: ignore
 
 from src.datamanager import DataManager, generate_lagged_sensor_measurements, generate_GRUD_4D_lags
 from src.mSHRED.mSRED import mSHRED
-from src.utils import generate_GRUD_4D_input
+from src.utils import generate_GRUD_4D_input, generate_channels
 
 class SHREDEngine:
 
@@ -17,6 +18,38 @@ class SHREDEngine:
         self.model = model
         # ensure model is in eval mode
         self.model.eval()
+
+    def sensor_to_reconstruction_dataset(self, test_dataset:Dataset):
+
+        X = test_dataset.X.cpu().numpy()  
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        X = torch.tensor(X, dtype=torch.float32, device=device)
+
+        with torch.no_grad():
+            output = self.model(X)
+
+        # 6) Convert to numpy and inverse scale using the DataManager's fitted scaler
+        output = self.dm.data_scaler.inverse_transform(output.detach().cpu().numpy())
+
+        # 7) If SVD was applied, inverse transform using the Vt matrix
+        results = {}
+        start_index = 0
+        for id in self.dm._dataset_ids:
+            length = self.dm._dataset_lengths.get(id)
+            Vt = self.dm._Vt_registry.get(id)
+            preSVD_scaler = self.dm._preSVD_scaler_registry.get(id)
+            spatial_shape = self.dm._dataset_spatial_shape.get(id)
+            dataset = output[:,start_index:start_index+length]
+            if Vt is not None:
+                dataset = dataset @ Vt
+            if preSVD_scaler is not None:
+                dataset = preSVD_scaler.inverse_transform(dataset)
+            original_shape = (dataset.shape[0],) + spatial_shape
+            results[id] = dataset.reshape(original_shape)
+            start_index = length + start_index
+
+        # Return a dictionary mapping dataset IDs to their corresponding reconstructed physical states
+        return results
 
     def sensor_to_reconstruction(self, sensor_measurements):
         # convert raw sensor measurements into latent-space embeddings
