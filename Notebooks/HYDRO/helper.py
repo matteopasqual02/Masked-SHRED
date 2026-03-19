@@ -63,12 +63,24 @@ def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, ite
     # Set default items and colormaps if not provided
     if items is None:
         items = ["Surface elevation", "U velocity", "V velocity"]
+    elif isinstance(items, str):
+        items = [items]
+    else:
+        items = list(items)
     if cmaps is None:
         cmaps = {
             "Surface elevation": "terrain",
             "U velocity": "twilight_shifted",
             "V velocity": "twilight_shifted",
         }
+
+    # Validate that all requested items exist in both input structures
+    missing_in_reconstruction = [item for item in items if item not in test_reconstruction]
+    if missing_in_reconstruction:
+        raise KeyError(
+            f"Missing items in test_reconstruction: {missing_in_reconstruction}. "
+            f"Available keys: {list(test_reconstruction.keys())}"
+        )
 
     # get the corresponding time values for the test set
     times_test = ds.time[-test_reconstruction[items[0]].shape[0]:]
@@ -83,17 +95,17 @@ def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, ite
 
     # Create datasets for reconstructions and errors
     ds_shred = mikeio.Dataset([
-        mikeio.DataArray(data=reconstructions[item], time=times_test, item=ds.items[i], geometry=geom)
-        for i, item in enumerate(items)
+        mikeio.DataArray(data=reconstructions[item], time=times_test, item=ds[item].item, geometry=geom)
+        for item in items
     ])
     ds_error = mikeio.Dataset([
         mikeio.DataArray(
             data=np.sqrt((ds[item].sel(time=times_test).values - ds_shred[item].values) ** 2),
             time=times_test,
-            item=ds.items[i],
+            item=ds[item].item,
             geometry=geom,
         )
-        for i, item in enumerate(items)
+        for item in items
     ])
 
     metrics = {}
@@ -115,7 +127,7 @@ def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, ite
     if plot_time is None:
         plot_time = ds_shred.time[-1]
 
-    fig, axs = plt.subplots(len(items), 3, figsize=(15, 11))
+    fig, axs = plt.subplots(len(items), 3, figsize=(15, 4 * len(items)), squeeze=False)
     for row, item in enumerate(items):
         reference  = ds[item].sel(time=plot_time)
         prediction = ds_shred[item].sel(time=plot_time)
@@ -124,8 +136,9 @@ def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, ite
         vmin = min(np.nanmin(reference.values), np.nanmin(prediction.values))
         vmax = max(np.nanmax(reference.values), np.nanmax(prediction.values))
 
-        reference.plot( ax=axs[row, 0], title=item,    cmap=cmaps[item], vmin=vmin, vmax=vmax)
-        prediction.plot(ax=axs[row, 1], title="SHRED", cmap=cmaps[item], vmin=vmin, vmax=vmax)
+        cmap = cmaps.get(item, "viridis")
+        reference.plot( ax=axs[row, 0], title=item,    cmap=cmap, vmin=vmin, vmax=vmax)
+        prediction.plot(ax=axs[row, 1], title="SHRED", cmap=cmap, vmin=vmin, vmax=vmax)
         error.plot(
             ax=axs[row, 2],
             title=f"Error\nMSE={metrics[item]['mse']:.6f}\nMRE={metrics[item]['mre']:.6f}",

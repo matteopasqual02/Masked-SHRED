@@ -47,6 +47,7 @@ class DataManager:
         self.data_scaler = None
 
         self._dataset_ids = []
+        self._active_dataset_ids = []
         self._dataset_spatial_shape = {}
         self._dataset_lengths = {}              # spatial dim after flattening to a single spatial axis
         self._Vt_registry = {}
@@ -120,6 +121,7 @@ class DataManager:
 
         # commit to self
         self._dataset_ids.append(id)
+        self._active_dataset_ids = list(self._dataset_ids)
         self._dataset_spatial_shape[self._dataset_ids[-1]] = dataset_spatial_shape
         self.train_indices = self.train_indices
         self.val_indices = self.val_indices
@@ -156,22 +158,24 @@ class DataManager:
 
         print(f"\nDatasets: {self._dataset_ids}")
         if unused_data is not None:
-            print(f"Dataset NOT used: {unused_data}")
-
-            data_blocks = []
-            col_start = 0
-            for ids in self._dataset_ids:
-                col_end = col_start + self._dataset_lengths[ids]
-                if ids not in unused_data:
-                    data_blocks.append(self.data[:, col_start:col_end])
-                col_start = col_end
-
-            if not data_blocks:
-                raise ValueError("All datasets were excluded via unused_data; no output targets remain.")
-
-            data = np.hstack(data_blocks)
+            excluded_ids = {unused_data} if isinstance(unused_data, str) else set(unused_data)
+            print(f"Dataset NOT used: {sorted(excluded_ids)}")
+            self._active_dataset_ids = [ids for ids in self._dataset_ids if ids not in excluded_ids]
         else:
-            data = self.data
+            self._active_dataset_ids = list(self._dataset_ids)
+
+        if not self._active_dataset_ids:
+            raise ValueError("All datasets were excluded via unused_data; no output targets remain.")
+
+        data_blocks = []
+        col_start = 0
+        for ids in self._dataset_ids:
+            col_end = col_start + self._dataset_lengths[ids]
+            if ids in self._active_dataset_ids:
+                data_blocks.append(self.data[:, col_start:col_end])
+            col_start = col_end
+
+        data = np.hstack(data_blocks)
             
         sc = MinMaxScaler()
         sc.fit(data[self.train_indices])

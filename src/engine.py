@@ -19,6 +19,40 @@ class SHREDEngine:
         # ensure model is in eval mode
         self.model.eval()
 
+    def _decode_output(self, output: np.ndarray):
+        active_ids = getattr(self.dm, "_active_dataset_ids", self.dm._dataset_ids)
+        expected_width = sum(self.dm._dataset_lengths[id] for id in active_ids)
+        if output.shape[1] != expected_width:
+            raise ValueError(
+                f"Model output width ({output.shape[1]}) does not match expected width ({expected_width}) "
+                f"for active datasets {active_ids}."
+            )
+
+        results = {}
+        start_index = 0
+        for id in active_ids:
+            length = self.dm._dataset_lengths.get(id)
+            Vt = self.dm._Vt_registry.get(id)
+            preSVD_scaler = self.dm._preSVD_scaler_registry.get(id)
+            spatial_shape = self.dm._dataset_spatial_shape.get(id)
+
+            dataset = output[:, start_index:start_index + length]
+            if Vt is not None:
+                if dataset.shape[1] != Vt.shape[0]:
+                    raise ValueError(
+                        f"Cannot apply inverse SVD for dataset '{id}': output slice width ({dataset.shape[1]}) "
+                        f"does not match Vt rows ({Vt.shape[0]})."
+                    )
+                dataset = dataset @ Vt
+            if preSVD_scaler is not None:
+                dataset = preSVD_scaler.inverse_transform(dataset)
+
+            original_shape = (dataset.shape[0],) + spatial_shape
+            results[id] = dataset.reshape(original_shape)
+            start_index += length
+
+        return results
+
     def sensor_to_reconstruction_dataset(self, test_dataset:Dataset):
 
         X = test_dataset.X.cpu().numpy()  
@@ -32,21 +66,7 @@ class SHREDEngine:
         output = self.dm.data_scaler.inverse_transform(output.detach().cpu().numpy())
 
         # 7) If SVD was applied, inverse transform using the Vt matrix
-        results = {}
-        start_index = 0
-        for id in self.dm._dataset_ids:
-            length = self.dm._dataset_lengths.get(id)
-            Vt = self.dm._Vt_registry.get(id)
-            preSVD_scaler = self.dm._preSVD_scaler_registry.get(id)
-            spatial_shape = self.dm._dataset_spatial_shape.get(id)
-            dataset = output[:,start_index:start_index+length]
-            if Vt is not None:
-                dataset = dataset @ Vt
-            if preSVD_scaler is not None:
-                dataset = preSVD_scaler.inverse_transform(dataset)
-            original_shape = (dataset.shape[0],) + spatial_shape
-            results[id] = dataset.reshape(original_shape)
-            start_index = length + start_index
+        results = self._decode_output(output)
 
         # Return a dictionary mapping dataset IDs to their corresponding reconstructed physical states
         return results
@@ -89,21 +109,7 @@ class SHREDEngine:
         output = self.dm.data_scaler.inverse_transform(output.detach().cpu().numpy())
 
         # 7) If SVD was applied, inverse transform using the Vt matrix
-        results = {}
-        start_index = 0
-        for id in self.dm._dataset_ids:
-            length = self.dm._dataset_lengths.get(id)
-            Vt = self.dm._Vt_registry.get(id)
-            preSVD_scaler = self.dm._preSVD_scaler_registry.get(id)
-            spatial_shape = self.dm._dataset_spatial_shape.get(id)
-            dataset = output[:,start_index:start_index+length]
-            if Vt is not None:
-                dataset = dataset @ Vt
-            if preSVD_scaler is not None:
-                dataset = preSVD_scaler.inverse_transform(dataset)
-            original_shape = (dataset.shape[0],) + spatial_shape
-            results[id] = dataset.reshape(original_shape)
-            start_index = length + start_index
+        results = self._decode_output(output)
 
         # Return a dictionary mapping dataset IDs to their corresponding reconstructed physical states
         return results
