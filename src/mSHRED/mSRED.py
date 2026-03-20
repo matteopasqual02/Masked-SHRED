@@ -29,6 +29,36 @@ class mSHRED(nn.Module):
                 bias=True,
                 input_length=args.input_length,
             )
+        elif args.encoder == "transformer_hidden_mask":
+            from .encoders.transformer_hidden_mask import TransformerHiddenMask
+            self.encoder = TransformerHiddenMask(
+                d_model=args.input_size,
+                hidden_size=args.hidden_size,
+                n_heads=args.n_heads,
+                num_encoder_layers=args.encoder_depth,
+                dim_feedforward=args.dim_feedforward,
+                dropout=args.dropout,
+                activation=nn.GELU(),
+                layer_norm_eps=1e-5,
+                norm_first=False,
+                bias=True,
+                input_length=args.input_length,
+            )
+        elif args.encoder == "transformer_attn_mask":
+            from .encoders.transformer_attn_mask import TransformerAttnMask
+            self.encoder = TransformerAttnMask(
+                d_model=args.input_size,
+                hidden_size=args.hidden_size,
+                n_heads=args.n_heads,
+                num_encoder_layers=args.encoder_depth,
+                dim_feedforward=args.dim_feedforward,
+                dropout=args.dropout,
+                activation=nn.GELU(),
+                layer_norm_eps=1e-5,
+                norm_first=False,
+                bias=True,
+                input_length=args.input_length,
+            )
         elif args.encoder == "xlstm":
             from .encoders.xlstm.xlstm import XLSTM
             self.encoder = XLSTM(
@@ -86,7 +116,7 @@ class mSHRED(nn.Module):
             raise NotImplementedError(f"Decoder {args.decoder} not implemented")
         
 
-    def forward(self, x):
+    def forward(self, x, mask=None):
 
         # Check if encoder and decoder are implemented
         if self.encoder is None:
@@ -94,7 +124,12 @@ class mSHRED(nn.Module):
         if self.decoder is None:
             raise NotImplementedError("Decoder not implemented")
         
-        return self.decoder(self.encoder(x))
+        if mask is not None:
+            encoded = self.encoder(x, mask)
+        else:
+            encoded = self.encoder(x)
+
+        return self.decoder(encoded)
         
     def freeze(self):
 

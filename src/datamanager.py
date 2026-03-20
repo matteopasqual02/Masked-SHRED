@@ -198,7 +198,7 @@ class DataManager:
                 scaled_sensor_measurements = generate_channels(scaled_sensor_measurements)
                 lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
             else:
-                raise ValueError("Unsupported masking type. Supported types are 'grud' and 'double_channels'.")
+                lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
 
         else:
             lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
@@ -224,9 +224,14 @@ class DataManager:
             print(f"Test:\t {Xtest.shape} -> {Ytest.shape}")   
 
         # return datasets
-        train_dataset = TimeSeriesDataset(Xtrain, Ytrain)
-        val_dataset = TimeSeriesDataset(Xval, Yval)
-        test_dataset = TimeSeriesDataset(Xtest, Ytest)
+        if masking_type is not None and masking_type == 'mask_data':
+            train_dataset = TimeSeriesDatasetWithMask(Xtrain, Ytrain)
+            val_dataset = TimeSeriesDatasetWithMask(Xval, Yval)
+            test_dataset = TimeSeriesDatasetWithMask(Xtest, Ytest)
+        else:
+            train_dataset = TimeSeriesDataset(Xtrain, Ytrain)
+            val_dataset = TimeSeriesDataset(Xval, Yval)
+            test_dataset = TimeSeriesDataset(Xtest, Ytest)
 
         Xtrain_mean = Xtrain.mean(dim=0, keepdim=True)
 
@@ -252,6 +257,31 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
         # return the number of samples in the dataset
         return self.len
 
+class TimeSeriesDatasetWithMask(torch.utils.data.Dataset):
+
+    def __init__(self, X, Y):
+        # X should be of shape (N, lags, num_sensors) nan replaced with 0
+        # M should be of shape (N, lags, num_sensors) and indicate which sensor measurements are observed (1) vs masked (0)
+        # Y should be of shape (N, state dims)
+
+        self.X = X
+        self.M = ~torch.isnan(X)            # mask indicating observed (1) vs masked
+        self.X[torch.isnan(self.X)] = 0     # replace nan with 0
+        self.Y = Y
+        self.len = X.shape[0]
+
+        self.M = self.M.float()  # convert mask to float for use in models that expect float inputs
+        self.X = self.X.float()  # ensure X is float for use in models
+        self.Y = self.Y.float()  # ensure Y is float for use in models
+
+    def __getitem__(self, index):
+        # return the sensor sequence, mask, and corresponding full-state measurement for the given index
+        return self.X[index], self.M[index], self.Y[index]
+    
+    def __len__(self):        
+        # return the number of samples in the dataset
+        return self.len     
+        
 # utility function
 
 def parse_compress(compress):

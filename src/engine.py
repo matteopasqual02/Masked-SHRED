@@ -19,6 +19,9 @@ class SHREDEngine:
         # ensure model is in eval mode
         self.model.eval()
 
+    def _model_device(self):
+        return "cuda" if torch.cuda.is_available() else "cpu"
+
     def _decode_output(self, output: np.ndarray):
         active_ids = getattr(self.dm, "_active_dataset_ids", self.dm._dataset_ids)
         expected_width = sum(self.dm._dataset_lengths[id] for id in active_ids)
@@ -55,12 +58,12 @@ class SHREDEngine:
 
     def sensor_to_reconstruction_dataset(self, test_dataset:Dataset):
 
-        X = test_dataset.X.cpu().numpy()  
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        X = torch.tensor(X, dtype=torch.float32, device=device)
+        device = self._model_device()
+        X = test_dataset.X.to(device)
+        M = test_dataset.M.to(device) if hasattr(test_dataset, "M") else None
 
         with torch.no_grad():
-            output = self.model(X)
+            output = self.model(X, M) if M is not None else self.model(X)
 
         # 6) Convert to numpy and inverse scale using the DataManager's fitted scaler
         output = self.dm.data_scaler.inverse_transform(output.detach().cpu().numpy())
@@ -70,50 +73,6 @@ class SHREDEngine:
 
         # Return a dictionary mapping dataset IDs to their corresponding reconstructed physical states
         return results
-
-    def sensor_to_reconstruction(self, sensor_measurements):
-        # convert raw sensor measurements into latent-space embeddings
-        
-        # 1) Pull out raw numpy array
-        if isinstance(sensor_measurements, pd.DataFrame):
-            sensor_measurements = sensor_measurements.values
-        elif torch.is_tensor(sensor_measurements):
-            sensor_measurements = sensor_measurements.detach().cpu().numpy()
-        elif isinstance(sensor_measurements, np.ndarray):
-            sensor_measurements = sensor_measurements
-        else:
-            raise TypeError(f"Unsupported type {type(sensor_measurements)} for sensor_measurements")
-        
-        # 2) Scale using the DataManager's fitted scaler (shape -> (T, n_sensors))
-        scaled_sensor_measurements = self.dm.sensor_scaler.transform(sensor_measurements)  
-        
-        # 3) Build lagged windows based on encoder type.
-        # Standard encoders expect (T, lags, n_sensors), while GRUD expects (T, 4, lags, n_sensors).
-        lags = self.dm.lags
-        encoder_name = self.model.encoder.__class__.__name__.lower()
-        if encoder_name in {"grud", "attngrud"}:
-            grud_input = generate_GRUD_4D_input(scaled_sensor_measurements)
-            lagged = generate_GRUD_4D_lags(grud_input, lags)
-        else:
-            lagged = generate_lagged_sensor_measurements(scaled_sensor_measurements, lags)
-        
-        # 4) To torch on same device as model:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        X = torch.tensor(lagged, dtype=torch.float32, device=device)
-        
-        # 5) Run through sequence to get latent:
-        with torch.no_grad():
-            output = self.model(X)
-
-        # 6) Convert to numpy and inverse scale using the DataManager's fitted scaler
-        output = self.dm.data_scaler.inverse_transform(output.detach().cpu().numpy())
-
-        # 7) If SVD was applied, inverse transform using the Vt matrix
-        results = self._decode_output(output)
-
-        # Return a dictionary mapping dataset IDs to their corresponding reconstructed physical states
-        return results
-
 
     def evaluate(self,sensor_measurements, Y):
         
@@ -138,4 +97,54 @@ class SHREDEngine:
             })
         return pd.DataFrame.from_records(records).set_index("dataset")
 
+
+"""
+    def sensor_to_reconstruction(self, sensor_measurements):
+        # convert raw sensor measurements into latent-space embeddings
         
+        # 1) Pull out raw numpy array
+        if isinstance(sensor_measurements, pd.DataFrame):
+            sensor_measurements = sensor_measurements.values
+        elif torch.is_tensor(sensor_measurements):
+            sensor_measurements = sensor_measurements.detach().cpu().numpy()
+        elif isinstance(sensor_measurements, np.ndarray):
+            sensor_measurements = sensor_measurements
+        else:
+            raise TypeError(f"Unsupported type {type(sensor_measurements)} for sensor_measurements")
+        
+        # 2) Scale using the DataManager's fitted scaler (shape -> (T, n_sensors))
+        scaled_sensor_measurements = self.dm.sensor_scaler.transform(sensor_measurements)  
+        
+        # 3) Build lagged windows based on encoder type.
+        # Standard encoders expect (T, lags, n_sensors), while GRUD expects (T, 4, lags, n_sensors).
+        lags = self.dm.lags
+        encoder_name = self.model.encoder.__class__.__name__.lower()
+        mask = None
+        if encoder_name in {"grud", "attngrud"}:
+            grud_input = generate_GRUD_4D_input(scaled_sensor_measurements)
+            lagged = generate_GRUD_4D_lags(grud_input, lags)
+        else:
+            lagged = generate_lagged_sensor_measurements(scaled_sensor_measurements, lags)
+            if encoder_name == "transformer_hidden_mask":
+                mask = (~np.isnan(lagged)).astype(np.float32)
+                lagged = np.nan_to_num(lagged, nan=0.0)
+        
+        # 4) To torch on same device as model:
+        device = self._model_device()
+        X = torch.tensor(lagged, dtype=torch.float32, device=device)
+        M = torch.tensor(mask, dtype=torch.float32, device=device) if mask is not None else None
+        
+        # 5) Run through sequence to get latent:
+        with torch.no_grad():
+            output = self.model(X, M) if M is not None else self.model(X)
+
+        # 6) Convert to numpy and inverse scale using the DataManager's fitted scaler
+        output = self.dm.data_scaler.inverse_transform(output.detach().cpu().numpy())
+
+        # 7) If SVD was applied, inverse transform using the Vt matrix
+        results = self._decode_output(output)
+
+        # Return a dictionary mapping dataset IDs to their corresponding reconstructed physical states
+        return results
+
+"""

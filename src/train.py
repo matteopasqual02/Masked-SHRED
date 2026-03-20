@@ -21,7 +21,8 @@ def fit(
     scheduler_warmup_steps: Optional[int] = None,
     weight_decay: float = 0.01,
     patience: int = 20,
-    verbose: bool = True
+    verbose: bool = True,
+    masking_type: Optional[str] = None,
 ):
     
     # get device
@@ -58,22 +59,40 @@ def fit(
     # start training loop
     print("Starting training...")
     pbar = tqdm(range(num_epochs), desc="Training", disable=not verbose)
+    is_mask_data = masking_type == 'mask_data'
     for epoch in pbar:
 
         #train
         model.train()
-        for X, Y in train_loader:
-            outputs = model(X)              #forward pass
-            optimizer.zero_grad()           #zero the gradients
-            loss = criterion(outputs, Y)    #compute the loss
-            loss.backward()                 #backward pass
-            optimizer.step()                #optimizer step
+        # If the dataset includes masks, we need to unpack the batches differently and pass the masks to the model.
+        if is_mask_data:
+            for batch in train_loader:
+                X, M, Y = batch
+                outputs = model(X, M)       # forward pass with explicit data mask
+                optimizer.zero_grad()           #zero the gradients
+                loss = criterion(outputs, Y)    #compute the loss
+                loss.backward()                 #backward pass
+                optimizer.step()                #optimizer step
 
-            # transformer scheduler step (if applicable, step once per optimizer step)
-            # NOTE: for the "Transformer" scheduler, we step once per optimizer step, 
-            # so we only step here if it's the "Transformer" scheduler
-            if scheduler is not None and lr_scheduler == "Transformer":
-                scheduler.step()
+                # transformer scheduler step (if applicable, step once per optimizer step)
+                # NOTE: for the "Transformer" scheduler, we step once per optimizer step, 
+                # so we only step here if it's the "Transformer" scheduler
+                if scheduler is not None and lr_scheduler == "Transformer":
+                    scheduler.step()
+        else:
+            for batch in train_loader:
+                X, Y = batch
+                outputs = model(X)          # forward pass
+                optimizer.zero_grad()           #zero the gradients
+                loss = criterion(outputs, Y)    #compute the loss
+                loss.backward()                 #backward pass
+                optimizer.step()                #optimizer step
+
+                # transformer scheduler step (if applicable, step once per optimizer step)
+                # NOTE: for the "Transformer" scheduler, we step once per optimizer step, 
+                # so we only step here if it's the "Transformer" scheduler
+                if scheduler is not None and lr_scheduler == "Transformer":
+                    scheduler.step()
 
         #evaluate on training and validation sets (both in eval mode for consistency)
         model.eval()
@@ -82,11 +101,21 @@ def fit(
             #train error
             train_loss = 0.0
             train_elements = 0
-            for X, Y in train_loader:
-                outputs = model(X)                  #forward pass
-                loss = val_criterion(outputs, Y)    #compute the loss
-                train_loss += loss.item()           # accumulate the loss
-                train_elements += Y.numel()         # accumulate the number of elements
+            # If the dataset includes masks, we need to unpack the batches differently and pass the masks to the model.
+            if is_mask_data:
+                for batch in train_loader:
+                    X, M, Y = batch
+                    outputs = model(X, M)           # forward pass with explicit data mask
+                    loss = val_criterion(outputs, Y)    #compute the loss
+                    train_loss += loss.item()           # accumulate the loss
+                    train_elements += Y.numel()         # accumulate the number of elements
+            else:
+                for batch in train_loader:
+                    X, Y = batch
+                    outputs = model(X)              # forward pass
+                    loss = val_criterion(outputs, Y)    #compute the loss
+                    train_loss += loss.item()           # accumulate the loss
+                    train_elements += Y.numel()         # accumulate the number of elements
                 
             train_loss = train_loss / train_elements  # average loss over all elements
             train_losses.append(train_loss)
@@ -94,11 +123,21 @@ def fit(
             #val error
             val_loss = 0.0
             val_elements = 0
-            for X, Y in val_loader:
-                outputs = model(X)                  #forward pass
-                loss = val_criterion(outputs, Y)    #compute the loss
-                val_loss += loss.item()             # accumulate the loss
-                val_elements += Y.numel()           # accumulate the number of elements
+            # If the dataset includes masks, we need to unpack the batches differently and pass the masks to the model.
+            if is_mask_data:
+                for batch in val_loader:
+                    X, M, Y = batch
+                    outputs = model(X, M)           # forward pass with explicit data mask
+                    loss = val_criterion(outputs, Y)    #compute the loss
+                    val_loss += loss.item()             # accumulate the loss
+                    val_elements += Y.numel()           # accumulate the number of elements
+            else:
+                for batch in val_loader:
+                    X, Y = batch
+                    outputs = model(X)              # forward pass
+                    loss = val_criterion(outputs, Y)    #compute the loss
+                    val_loss += loss.item()             # accumulate the loss
+                    val_elements += Y.numel()           # accumulate the number of elements
 
             val_loss = val_loss / val_elements  # average loss over all elements
             val_losses.append(val_loss)
@@ -152,6 +191,7 @@ def evaluate(
     batch_size: int = 64,
     loss_fn = torch.nn.MSELoss(reduction='sum'),
     eps: float = 1e-12,
+    masking_type: Optional[str] = None,
 ):
     
     #evaluate the model on the given dataset and return the error
@@ -161,20 +201,36 @@ def evaluate(
     total_elements = 0
     total_mre = 0.0
     total_mre_elements = 0
-
+    is_mask_data = masking_type == 'mask_data'
+    
     with torch.no_grad():
-        for X, Y in dataloader:
-            outputs = model(X)                  #forward pass
-            loss = loss_fn(outputs, Y)          #compute the loss
-            total_loss += loss.item()           # accumulate the loss
-            total_elements += Y.numel()         # accumulate the number of elements
+        # If the dataset includes masks, we need to unpack the batches differently and pass the masks to the model.
+        if is_mask_data:
+            for X, M, Y in dataloader:
+                outputs = model(X, M)               # forward pass with explicit data mask
+                loss = loss_fn(outputs, Y)          #compute the loss
+                total_loss += loss.item()           # accumulate the loss
+                total_elements += Y.numel()         # accumulate the number of elements
 
-            # Mean Relative Error over the last axis, averaged over all remaining axes.
-            numerator = (Y - outputs).pow(2).sum(dim=-1).sqrt()         # compute the numerator of the relative error
-            denominator = Y.pow(2).sum(dim=-1).sqrt().clamp_min(eps)    # compute the denominator of the relative error, with a small epsilon to avoid division by zero
-            rel_error = numerator / denominator                         # compute the relative error
-            total_mre += rel_error.sum().item()                         # accumulate the relative error
-            total_mre_elements += rel_error.numel()                     # accumulate the number of elements for the relative error
+                # Mean Relative Error over the last axis, averaged over all remaining axes.
+                numerator = (Y - outputs).pow(2).sum(dim=-1).sqrt()         # compute the numerator of the relative error
+                denominator = Y.pow(2).sum(dim=-1).sqrt().clamp_min(eps)    # compute the denominator of the relative error, with a small epsilon to avoid division by zero
+                rel_error = numerator / denominator                         # compute the relative error
+                total_mre += rel_error.sum().item()                         # accumulate the relative error
+                total_mre_elements += rel_error.numel()                     # accumulate the number of elements for the relative error
+        else:
+            for X, Y in dataloader:
+                outputs = model(X)                  #forward pass
+                loss = loss_fn(outputs, Y)          #compute the loss
+                total_loss += loss.item()           # accumulate the loss
+                total_elements += Y.numel()         # accumulate the number of elements
+
+                # Mean Relative Error over the last axis, averaged over all remaining axes.
+                numerator = (Y - outputs).pow(2).sum(dim=-1).sqrt()         # compute the numerator of the relative error
+                denominator = Y.pow(2).sum(dim=-1).sqrt().clamp_min(eps)    # compute the denominator of the relative error, with a small epsilon to avoid division by zero
+                rel_error = numerator / denominator                         # compute the relative error
+                total_mre += rel_error.sum().item()                         # accumulate the relative error
+                total_mre_elements += rel_error.numel()                     # accumulate the number of elements for the relative error
 
     # compute the mean loss over all elements
     mse = total_loss / total_elements
