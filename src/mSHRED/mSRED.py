@@ -58,6 +58,7 @@ class mSHRED(nn.Module):
                 norm_first=False,
                 bias=True,
                 input_length=args.input_length,
+                double_channels=args.double_channels,
             )
         elif args.encoder == "xlstm":
             from .encoders.xlstm.xlstm import XLSTM

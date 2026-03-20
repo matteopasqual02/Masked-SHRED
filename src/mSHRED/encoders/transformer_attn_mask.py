@@ -310,15 +310,19 @@ class TransformerAttnMask(nn.Module):
         input_length: int,          # Maximum input sequence length for positional encoding
         hidden_size: int,           # Hidden size for the input projection layer
         device: str = "cpu",        # Device to run the model on (e.g., "cpu" or "cuda")
+        double_channels: bool = False,   # Whether to concatenate the missing mask as extra feature channel (b, t, s) -> (b, t, s*2)
         **kwargs,
     ):
         
         super().__init__()
         dtype=torch.float32
 
+        self.double_channels = double_channels  # Store whether to use double channels
+
         # Input projection layer to map input features to the model's embedding dimension
+        # If double_channels, d_model*2 because the missing mask is concatenated to the input (b, t, s) -> (b, t, s*2)
         self.input_embedding = nn.Linear(
-            d_model, hidden_size, bias=bias, device=device
+            d_model * 2 if double_channels else d_model, hidden_size, bias=bias, device=device
         )  
         # Encoder
         self.encoder = TransformerEncoderLayer(
@@ -343,13 +347,24 @@ class TransformerAttnMask(nn.Module):
 
     def forward(self, src, missing_mask=None, is_causal=True):
         # missing_mask: (b, t, s) — 1=valid, 0=missing. 
+        # Strategy 1: zero-fill missing sensors + concatenate mask as extra feature channel
+        #             so the model knows which sensors are reliable at each timestep
+        # Strategy 2: attention mask that blocks fully-missing timesteps from influencing others
         # Pass is_causal=False to SDPA since it is already embedded
         # in the attention mask. Omitting missing_mask preserves the original behaviour.
 
         if missing_mask is not None:
-            # SDPA's own causal masking to avoid double application
-            src_mask  = build_missing_attn_mask(missing_mask, is_causal=is_causal)  # (b, t, t)
+            # Strategy 1 (optional): zero-fill + concatenate mask channel (b, t, s) -> (b, t, s*2)
+            #                        so the model knows which sensors are reliable at each timestep
+            if self.double_channels:
+                src = torch.cat([src * missing_mask.float(), missing_mask.float()], dim=-1)
+            else:
+                src = src * missing_mask.float()  # zero-fill only
+            # Strategy 2: attention mask for fully-missing timesteps (+ causal) -> (b, t, t)
+            src_mask  = build_missing_attn_mask(missing_mask, is_causal=is_causal)
             is_causal = False
+        else:
+            src_mask = None
 
         # Embed the input and add positional encoding
         src = self.input_embedding(src)  # Project input features to the model's embedding dimension
