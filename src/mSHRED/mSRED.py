@@ -28,6 +28,7 @@ class mSHRED(nn.Module):
                 norm_first=False,
                 bias=True,
                 input_length=args.input_length,
+                double_channels=args.double_channels,
             )
         elif args.encoder == "transformer_hidden_mask":
             from .encoders.transformer_hidden_mask import TransformerHiddenMask
@@ -59,6 +60,21 @@ class mSHRED(nn.Module):
                 bias=True,
                 input_length=args.input_length,
                 double_channels=args.double_channels,
+            )
+        elif args.encoder == "transformer_learned_mask":
+            from .encoders.transformer_learned_mask import TransformerLearnedMask
+            self.encoder = TransformerLearnedMask(
+                d_model=args.input_size,
+                hidden_size=args.hidden_size,
+                n_heads=args.n_heads,
+                num_encoder_layers=args.encoder_depth,
+                dim_feedforward=args.dim_feedforward,
+                dropout=args.dropout,
+                activation=nn.GELU(),
+                layer_norm_eps=1e-5,
+                norm_first=False,
+                bias=True,
+                input_length=args.input_length,
             )
         elif args.encoder == "xlstm":
             from .encoders.xlstm.xlstm import XLSTM

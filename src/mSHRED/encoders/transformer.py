@@ -278,15 +278,18 @@ class Transformer(nn.Module):
         input_length: int,          # Maximum input sequence length for positional encoding
         hidden_size: int,           # Hidden size for the input projection layer
         device: str = "cpu",        # Device to run the model on (e.g., "cpu" or "cuda")
+        double_channels: bool = False, # Whether to double the input channels by concatenating the mask
         **kwargs,
     ):
         
         super().__init__()
         dtype=torch.float32
+        self.double_channels = double_channels  # Whether to double the input channels by concatenating the mask
 
         # Input projection layer to map input features to the model's embedding dimension
+        # If double_channels is True, the input dimension is doubled because the mask is concatenated to src.
         self.input_embedding = nn.Linear(
-            d_model, hidden_size, bias=bias, device=device
+            d_model * 2 if double_channels else d_model, hidden_size, bias=bias, device=device
         )  
         # Encoder
         self.encoder = TransformerEncoderLayer(
@@ -311,13 +314,23 @@ class Transformer(nn.Module):
 
     def forward(self, src, src_mask=None, is_causal=True):
 
+        # src_mask is provided in sensor space (batch, lags, sensors).
+        # Apply masking before embedding so dimensions remain consistent.
+        if src_mask is None:
+            src_mask = torch.ones_like(src)
+
+        if self.double_channels:
+            src = torch.cat([src * src_mask.float(), src_mask.float()], dim=-1)  # zero-fill + append mask channel
+        else:
+            src = src * src_mask.float()  # zero-fill only
+
         # Embed the input and add positional encoding
         src = self.input_embedding(src)  # Project input features to the model's embedding dimension
         src = self.pos_encoder(src)      # Add positional encoding to the input
 
         # Pass the input through the transformer encoder
         transformer_output = self.transformer_encoder(
-            src, mask=src_mask, is_causal=is_causal
+            src, mask=None, is_causal=is_causal
         ) 
 
         # Return only the last timestep's output for each sequence in the batch
