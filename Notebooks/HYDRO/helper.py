@@ -58,6 +58,61 @@ def get_altimetry_obs(quality=None):
         altlist.append(o)
     return altlist
 
+def extract_water_level_measurements(stations, ds_time, obs_fldr, window="25min"):
+    # Extract water level measurements for given stations and simulation timestamps.
+    # For each station, attempts to read filtered water level data aligned with simulation timestamps.
+    # If unavailable, falls back to raw water level data and takes the last measurement within 
+    # a specified time window before each simulation timestamp.
+    
+    measurements = np.full((ds_time.shape[0], len(stations)), np.nan)   # Initialize measurements array with NaNs
+    ds_times = pd.DatetimeIndex(ds_time.values)                         # Convert simulation timestamps to pandas DatetimeIndex for easier time-based indexing  
+    window_delta = pd.Timedelta(window)                                 # Convert window string to pandas Timedelta for time-based filtering
+    missing_files = []                                                  # List to track stations with missing or incompatible files
+
+    # Loop through each station and attempt to read corresponding water level data
+    for i, station in enumerate(stations):
+
+        # Try both naming conventions used in this dataset
+        candidates = [
+            obs_fldr + station.name + "_wl.csv",
+            obs_fldr + "Altimetry_wl_" + station.name + ".csv",
+        ]
+
+        # Find the first existing file among the candidates
+        csv_path = next((p for p in candidates if Path(p).exists()), None)
+        if csv_path is None:
+            missing_files.append(station.name)
+            continue
+
+        # Read station data from the identified CSV file
+        stn_data = pd.read_csv(csv_path, index_col=0, parse_dates=True)
+
+        # If filtered data exists, align exactly on simulation timestamps
+        if "water_level_filtered" in stn_data.columns:
+            measurements[:, i] = stn_data["water_level_filtered"].reindex(
+                ds_time.strftime("%Y-%m-%d %H:%M:%S")
+            ).values
+            continue
+
+        # Fallback for raw water level data: take last value in a time window
+        if "water_level" in stn_data.columns:
+            wl = stn_data["water_level"].sort_index()
+            for j, t in enumerate(ds_times):
+                window_vals = wl[(wl.index > t - window_delta) & (wl.index <= t)]
+                if len(window_vals) > 0:
+                    measurements[j, i] = window_vals.iloc[-1]
+
+        # If neither filtered nor raw data could be aligned, mark as missing
+        else:
+            missing_files.append(station.name)
+
+    # Report any stations for which measurement files were missing or incompatible
+    if missing_files:
+        print("Missing or incompatible measurement files for:", sorted(set(missing_files)))
+
+    # Return the measurements array
+    return measurements
+
 def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, items=None, cmaps=None, title_suffix=""):
     
     # Set default items and colormaps if not provided
