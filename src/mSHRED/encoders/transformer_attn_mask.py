@@ -357,9 +357,7 @@ class TransformerAttnMask(nn.Module):
             # Strategy 1 (optional): zero-fill + concatenate mask channel (b, t, s) -> (b, t, s*2)
             #                        so the model knows which sensors are reliable at each timestep
             if self.double_channels:
-                src = torch.cat([src * missing_mask.float(), missing_mask.float()], dim=-1)
-            else:
-                src = src * missing_mask.float()  # zero-fill only
+                src = torch.cat([src, missing_mask], dim=-1)
             # Strategy 2: attention mask for fully-missing timesteps (+ causal) -> (b, t, t)
             src_mask  = build_missing_attn_mask(missing_mask, is_causal=is_causal)
             is_causal = False

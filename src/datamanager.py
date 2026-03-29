@@ -228,6 +228,10 @@ class DataManager:
             train_dataset = TimeSeriesDatasetWithMask(Xtrain, Ytrain)
             val_dataset = TimeSeriesDatasetWithMask(Xval, Yval)
             test_dataset = TimeSeriesDatasetWithMask(Xtest, Ytest)
+        elif masking_type is not None and masking_type == 'mask_data_random':
+            train_dataset = TimeSeriesDatasetWithMask(Xtrain, Ytrain, random=True)
+            val_dataset = TimeSeriesDatasetWithMask(Xval, Yval, random=True)
+            test_dataset = TimeSeriesDatasetWithMask(Xtest, Ytest, random=True)
         else:
             train_dataset = TimeSeriesDataset(Xtrain, Ytrain)
             val_dataset = TimeSeriesDataset(Xval, Yval)
@@ -259,14 +263,22 @@ class TimeSeriesDataset(torch.utils.data.Dataset):
 
 class TimeSeriesDatasetWithMask(torch.utils.data.Dataset):
 
-    def __init__(self, X, Y):
+    def __init__(self, X, Y, random=False):
         # X should be of shape (N, lags, num_sensors) nan replaced with 0
         # M should be of shape (N, lags, num_sensors) and indicate which sensor measurements are observed (1) vs masked (0)
         # Y should be of shape (N, state dims)
 
         self.X = X
         self.M = ~torch.isnan(X)            # mask indicating observed (1) vs masked
-        self.X[torch.isnan(self.X)] = 0     # replace nan with 0
+        if not random:
+            # replace nan with 0
+            self.X[torch.isnan(self.X)] = 0     # replace nan with 0
+        else:
+            # replace nan with random values between -0.5 and 1.5 
+            # (since we will apply MinMaxScaler to the sensor measurements, 
+            # which scales them to be between 0 and 1, we can use a wider range 
+            # for the random values to ensure they are outside the normal range of the data)  
+            self.X[torch.isnan(self.X)] = torch.rand(torch.isnan(self.X).sum(), device=X.device) * 2 - 0.5
         self.Y = Y
         self.len = X.shape[0]
 

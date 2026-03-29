@@ -377,9 +377,7 @@ class TransformerLearnedMask(nn.Module):
 
         # Apply missing mask to the input before embedding
         if self.double_channels:
-            src = torch.cat([src * missing_mask.float(), missing_mask.float()], dim=-1)  # zero-fill + append mask channel
-        else:
-            src = src * missing_mask.float()  # zero-fill only
+            src = torch.cat([src, missing_mask], dim=-1)  # append mask channel
 
         # Embed the input and add positional encoding
         src = self.input_embedding(src)  # Project input features to the model's embedding dimension

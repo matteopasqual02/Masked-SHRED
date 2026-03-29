@@ -320,9 +320,7 @@ class Transformer(nn.Module):
             src_mask = torch.ones_like(src)
 
         if self.double_channels:
-            src = torch.cat([src * src_mask.float(), src_mask.float()], dim=-1)  # zero-fill + append mask channel
-        else:
-            src = src * src_mask.float()  # zero-fill only
+            src = torch.cat([src, src_mask], dim=-1)  # append mask channel
 
         # Embed the input and add positional encoding
         src = self.input_embedding(src)  # Project input features to the model's embedding dimension
