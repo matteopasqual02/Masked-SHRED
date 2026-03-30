@@ -9,7 +9,7 @@ from .mSHRED.mSRED import mSHRED
 def fit(
     model: mSHRED,
     train_dataset: torch.utils.data.Dataset,
-    val_dataset: torch.utils.data.Dataset,
+    val_dataset: Optional[torch.utils.data.Dataset] = None,
     batch_size: int = 64,
     num_epochs: int = 200,
     lr: float = 1e-3,
@@ -29,8 +29,10 @@ def fit(
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # train loader 
+    has_val = val_dataset is not None
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+    if has_val:
+        val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
     # criterion, optimizer, and scheduler
     criterion = torch.nn.MSELoss()          # used for backward pass
@@ -51,10 +53,11 @@ def fit(
     train_losses = []
     val_losses = []
 
-    # early stopping variables
-    best_val_loss = float('inf')
-    patience_counter = 0
-    best_params = model.state_dict()
+    if has_val:
+        # early stopping variables
+        best_val_loss = float('inf')
+        patience_counter = 0
+        best_params = model.state_dict()
 
     # start training loop
     print("Starting training...")
@@ -120,27 +123,28 @@ def fit(
             train_loss = train_loss / train_elements  # average loss over all elements
             train_losses.append(train_loss)
 
-            #val error
-            val_loss = 0.0
-            val_elements = 0
-            # If the dataset includes masks, we need to unpack the batches differently and pass the masks to the model.
-            if is_mask_data:
-                for batch in val_loader:
-                    X, M, Y = batch
-                    outputs = model(X, M)           # forward pass with explicit data mask
-                    loss = val_criterion(outputs, Y)    #compute the loss
-                    val_loss += loss.item()             # accumulate the loss
-                    val_elements += Y.numel()           # accumulate the number of elements
-            else:
-                for batch in val_loader:
-                    X, Y = batch
-                    outputs = model(X)              # forward pass
-                    loss = val_criterion(outputs, Y)    #compute the loss
-                    val_loss += loss.item()             # accumulate the loss
-                    val_elements += Y.numel()           # accumulate the number of elements
+            if has_val:
+                #val error
+                val_loss = 0.0
+                val_elements = 0
+                # If the dataset includes masks, we need to unpack the batches differently and pass the masks to the model.
+                if is_mask_data:
+                    for batch in val_loader:
+                        X, M, Y = batch
+                        outputs = model(X, M)           # forward pass with explicit data mask
+                        loss = val_criterion(outputs, Y)    #compute the loss
+                        val_loss += loss.item()             # accumulate the loss
+                        val_elements += Y.numel()           # accumulate the number of elements
+                else:
+                    for batch in val_loader:
+                        X, Y = batch
+                        outputs = model(X)              # forward pass
+                        loss = val_criterion(outputs, Y)    #compute the loss
+                        val_loss += loss.item()             # accumulate the loss
+                        val_elements += Y.numel()           # accumulate the number of elements
 
-            val_loss = val_loss / val_elements  # average loss over all elements
-            val_losses.append(val_loss)
+                val_loss = val_loss / val_elements  # average loss over all elements
+                val_losses.append(val_loss)
 
         # step the learning rate scheduler 
         # NOTE: for the "Transformer" scheduler, we step once per optimizer step, 
@@ -150,33 +154,43 @@ def fit(
 
         #logging with tqdm
         if verbose:
-            pbar.set_postfix({
-                "Train Loss": f"{train_loss:.4f}", 
-                "Val Loss": f"{val_loss:.4f}",
-                "Patience": patience_counter,
-                "Best Val Loss": f"{best_val_loss:.4f}",
-                "LR": f"{optimizer.param_groups[0]['lr']:.2e}"
-                })
+            if has_val:
+                pbar.set_postfix({
+                    "Train Loss": f"{train_loss:.4f}", 
+                    "Val Loss": f"{val_loss:.4f}",
+                    "Patience": patience_counter,
+                    "Best Val Loss": f"{best_val_loss:.4f}",
+                    "LR": f"{optimizer.param_groups[0]['lr']:.2e}"
+                    })
+            else:
+                pbar.set_postfix({
+                    "Train Loss": f"{train_loss:.4f}", 
+                    "LR": f"{optimizer.param_groups[0]['lr']:.2e}"
+                    })
     
-        #early stopping
-        # If the validation loss has improved, save the model parameters and reset the patience counter
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_params = model.state_dict()
-            patience_counter = 0
-        # If the validation loss has not improved, increment the patience counter
-        else:
-            patience_counter += 1
-        # If the patience counter exceeds the specified patience, stop training and load the best model parameters
-        if patience_counter >= patience:
-            model.load_state_dict(best_params)
-            if verbose:
-                print(f"Early stopping at epoch {epoch+1}")
-            break
+        if has_val:
+            #early stopping
+            # If the validation loss has improved, save the model parameters and reset the patience counter
+            if val_loss < best_val_loss:
+                best_val_loss = val_loss
+                best_params = model.state_dict()
+                patience_counter = 0
+            # If the validation loss has not improved, increment the patience counter
+            else:
+                patience_counter += 1
+            # If the patience counter exceeds the specified patience, stop training and load the best model parameters
+            if patience_counter >= patience:
+                model.load_state_dict(best_params)
+                if verbose:
+                    print(f"Early stopping at epoch {epoch+1}")
+                break
 
     #End of training loop
-    model.load_state_dict(best_params)  # Load the best model parameters before returning
-    print(f"Training completed with best validation loss: {best_val_loss:.4f}")
+    if has_val:
+        model.load_state_dict(best_params)  # Load the best model parameters before returning
+        print(f"Training completed with best validation loss: {best_val_loss:.4f}")
+    else:
+        print("Training completed without validation set (early stopping disabled).")
     pbar.close()
 
     # Convert the lists of training and validation losses to numpy arrays before returning
