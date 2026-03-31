@@ -1,0 +1,2 @@
+model,type,train-mse,val-mse,test-mse,train-mre,val-mre,test-mre
+(mSHRED): TR + MLP,(T.0) only available sensors,0.03787505085515504,0.02535090163202569,0.0269594407317662,0.24236821030626202,0.24713077781224016,0.21281669730007058
