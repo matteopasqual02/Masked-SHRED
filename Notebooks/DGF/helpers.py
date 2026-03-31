@@ -55,6 +55,10 @@ class DGFsimulation:
             frequency = np.random.uniform(self.frequency_range[0], self.frequency_range[1])
             self.U[i], self.V[i] = self.double_gyre_flow(amplitude, frequency, self.x, self.y, self.t)
 
+        permutation = np.random.permutation(self.ntrajectories)
+        self.U = self.U[permutation]
+        self.V = self.V[permutation]
+
         self.Ureshaped = self.U.reshape(self.ntrajectories, self.ntimes, self.nstate)
         self.Vreshaped = self.V.reshape(self.ntrajectories, self.ntimes, self.nstate)
 
@@ -152,17 +156,6 @@ class DGFsimulation:
         V_true = self.V[orig_idx, which_time]
         U_pred = Urecon[which_trajectory, which_time]
         V_pred = Vrecon[which_trajectory, which_time]
-        eps = 1e-12
-        # U MRE
-        numerator_u = np.sqrt(np.nansum((U_true - U_pred) ** 2, axis=-1))
-        denominator_u = np.sqrt(np.nansum(U_true ** 2, axis=-1))
-        rel_error_u = numerator_u / np.maximum(denominator_u, eps)
-        mre_u = np.nanmean(rel_error_u)
-        # V MRE
-        numerator_v = np.sqrt(np.nansum((V_true - V_pred) ** 2, axis=-1))
-        denominator_v = np.sqrt(np.nansum(V_true ** 2, axis=-1))
-        rel_error_v = numerator_v / np.maximum(denominator_v, eps)
-        mre_v = np.nanmean(rel_error_v)
 
         offset = 0.1
         fig, axes = plt.subplots(1, 2, figsize=(18, 6))
@@ -207,7 +200,7 @@ class DGFsimulation:
             V_pred.T,
             color='black', linewidth=1, density=1
         )
-        ax.set_title(f'Reconstructed Trajectory {which_trajectory} at t={round(self.t[which_time], 3)}\nMRE U: {mre_u*100:.2f}%, MRE V: {mre_v*100:.2f}%')
+        ax.set_title(f'Reconstructed Trajectory {which_trajectory} at t={round(self.t[which_time], 3)} ')
         ax.axis('off')
         ax.axis([0 - offset, self.Lx + offset, 0 - offset, self.Ly + offset])
         ax.grid(True)
