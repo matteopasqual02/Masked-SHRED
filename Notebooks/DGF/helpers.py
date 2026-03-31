@@ -1,19 +1,22 @@
-import numpy as np                  #type: ignore
-import matplotlib.pyplot as plt     #type: ignore
-from matplotlib import patches      #type: ignore
+
+import numpy as np  # type: ignore
+import matplotlib.pyplot as plt  # type: ignore
+from matplotlib import patches  # type: ignore
+
 
 class DGFsimulation:
+
     def __init__(
-        self, 
-        amplitude_range = np.array([0.0, 0.5]), 
-        frequency_range = np.array([0.5, 2*np.pi]), 
-        nx = 50, 
-        ny = 25, 
-        Lx = 2.0, 
-        Ly = 1.0, 
-        dt = 0.1, 
-        T  = 10.0, 
-        ntrajectories = 100
+        self,
+        amplitude_range=np.array([0.0, 0.5]),
+        frequency_range=np.array([0.5, 2 * np.pi]),
+        nx=50,
+        ny=25,
+        Lx=2.0,
+        Ly=1.0,
+        dt=0.1,
+        T=10.0,
+        ntrajectories=100,
     ):
         # amplitude and frequency ranges for the double gyre flow
         self.amplitude_range = amplitude_range
@@ -54,15 +57,13 @@ class DGFsimulation:
 
         self.Ureshaped = self.U.reshape(self.ntrajectories, self.ntimes, self.nstate)
         self.Vreshaped = self.V.reshape(self.ntrajectories, self.ntimes, self.nstate)
-        
+
         return self.U, self.V
     
-    def generate_measurements_U(self, nsensors = 3):
-        
+    def generate_measurements_U(self, nsensors=3):
         U = self.U.reshape(self.ntrajectories, self.ntimes, self.nstate)
-        self.sensor_indices = np.random.choice(self.nstate, nsensors, replace = False)
+        self.sensor_indices = np.random.choice(self.nstate, nsensors, replace=False)
         U_measurements = U[:, :, self.sensor_indices]
-
         return U_measurements
     
     def get_reshaped_data(self):
@@ -72,40 +73,53 @@ class DGFsimulation:
             self.Vreshaped = self.V.reshape(self.ntrajectories, self.ntimes, self.nstate)
         return self.Ureshaped, self.Vreshaped
 
-    def double_gyre_flow(self, amplitude, frequency, x, y, t, intensity = 0.1):
-        # Create spatial and temporal grids 
-    
-        xgrid, ygrid = np.meshgrid(x, y)         # spatial grid
-        u = np.zeros((len(t), len(x), len(y)))   # horizontal velocity
-        v = np.zeros((len(t), len(x), len(y)))   # vertical velocity
-        f = lambda x,t: amplitude * np.sin(frequency * t) * x**2 + x - 2 * amplitude * np.sin(frequency * t) * x
+    def double_gyre_flow(self, amplitude, frequency, x, y, t, intensity=0.1):
+        # Create spatial and temporal grids
+        xgrid, ygrid = np.meshgrid(x, y)  # spatial grid
+        u = np.zeros((len(t), len(x), len(y)))  # horizontal velocity
+        v = np.zeros((len(t), len(x), len(y)))  # vertical velocity
+        f = lambda x, t: amplitude * np.sin(frequency * t) * x ** 2 + x - 2 * amplitude * np.sin(frequency * t) * x
 
         # compute solution
         for i in range(len(t)):
-            u[i] = (-np.pi * intensity * np.sin(np.pi * f(xgrid, t[i])) * np.cos(np.pi * ygrid)).T
-            v[i] = (np.pi * intensity * np.cos(np.pi * f(xgrid, t[i])) * np.sin(np.pi * ygrid) * (2 * amplitude * np.sin(frequency * t[i]) * xgrid + 1.0 - 2 * amplitude * np.sin(frequency * t[i]))).T
-
+            u[i] = (
+                -np.pi * intensity * np.sin(np.pi * f(xgrid, t[i])) * np.cos(np.pi * ygrid)
+            ).T
+            v[i] = (
+                np.pi * intensity * np.cos(np.pi * f(xgrid, t[i])) * np.sin(np.pi * ygrid)
+                * (2 * amplitude * np.sin(frequency * t[i]) * xgrid + 1.0 - 2 * amplitude * np.sin(frequency * t[i]))
+            ).T
         return u, v
     
     def vorticity(self, u, v):
         # Compute the vorticity of the flow field given the horizontal and vertical velocity components
         dx = self.Lx / self.nx
         dy = self.Ly / self.ny
-        du_dy = np.gradient(u, dy, axis = 1)
-        dv_dx = np.gradient(v, dx, axis = 0)
+        du_dy = np.gradient(u, dy, axis=1)
+        dv_dx = np.gradient(v, dx, axis=0)
         return dv_dx - du_dy
 
     def plot_data(self, which_trajectory, which_time=-1):
         offset = 0.1
-        plt.figure(figsize = (10,5))
-        plt.contourf(self.x, self.y, self.vorticity(self.U[which_trajectory, which_time], self.V[which_trajectory, which_time]).T, cmap = 'seismic', levels = 100)
-        plt.streamplot(self.x, self.y, self.U[which_trajectory, which_time].T, self.V[which_trajectory, which_time].T, color='black', linewidth = 1, density = 1)
+        plt.figure(figsize=(10, 5))
+        plt.contourf(
+            self.x, self.y,
+            self.vorticity(self.U[which_trajectory, which_time], self.V[which_trajectory, which_time]).T,
+            cmap='seismic', levels=100
+        )
+        plt.streamplot(
+            self.x, self.y,
+            self.U[which_trajectory, which_time].T,
+            self.V[which_trajectory, which_time].T,
+            color='black', linewidth=1, density=1
+        )
         plt.axis('off')
         plt.axis([0 - offset, self.Lx + offset, 0 - offset, self.Ly + offset])
         plt.title(f'Trajectory {which_trajectory} at time t = {round(self.t[which_time], 3)}')
         plt.grid(True)
-        plt.gca().add_patch(patches.Rectangle((0, 0), self.Lx, self.Ly, linewidth = 5, edgecolor = 'black', facecolor = 'none'))
-
+        plt.gca().add_patch(
+            patches.Rectangle((0, 0), self.Lx, self.Ly, linewidth=5, edgecolor='black', facecolor='none')
+        )
         # Plot measurement sites if available
         if self.sensor_indices is not None:
             idx_sensors_x, idx_sensors_y = np.unravel_index(self.sensor_indices, (self.nx, self.ny))
@@ -113,7 +127,99 @@ class DGFsimulation:
             sensors_y = self.y[idx_sensors_y]
             plt.plot(sensors_x, sensors_y, 'o', mfc='magenta', mec='black', ms=8, mew=1.5, label='Measurement Sites')
             plt.legend(loc='upper right')
-
         plt.show()
 
-   
+    def plot_comparison(self, test_reconstruction, test_indices, which_trajectory, which_time=-1):
+        # Extract the reconstructed U and V fields for the specified trajectory and time
+        U_recon, V_recon = test_reconstruction["U"], test_reconstruction["V"]
+        Urecon = U_recon.reshape(-1, self.ntimes, self.nx, self.ny)
+        Vrecon = V_recon.reshape(-1, self.ntimes, self.nx, self.ny)
+
+        # Bounds check for which_trajectory
+        n_trajectories = Urecon.shape[0]
+        if which_trajectory < 0 or which_trajectory >= n_trajectories:
+            print(f"Error: which_trajectory={which_trajectory} is out of bounds. Available: 0 to {n_trajectories-1}")
+            return
+
+        # Map reconstructed index to original index
+        if test_indices is not None:
+            orig_idx = test_indices[which_trajectory]
+        else:
+            orig_idx = which_trajectory
+
+        # Compute mean relative error (MRE) for U and V using the provided formula
+        U_true = self.U[orig_idx, which_time]
+        V_true = self.V[orig_idx, which_time]
+        U_pred = Urecon[which_trajectory, which_time]
+        V_pred = Vrecon[which_trajectory, which_time]
+        eps = 1e-12
+        # U MRE
+        numerator_u = np.sqrt(np.nansum((U_true - U_pred) ** 2, axis=-1))
+        denominator_u = np.sqrt(np.nansum(U_true ** 2, axis=-1))
+        rel_error_u = numerator_u / np.maximum(denominator_u, eps)
+        mre_u = np.nanmean(rel_error_u)
+        # V MRE
+        numerator_v = np.sqrt(np.nansum((V_true - V_pred) ** 2, axis=-1))
+        denominator_v = np.sqrt(np.nansum(V_true ** 2, axis=-1))
+        rel_error_v = numerator_v / np.maximum(denominator_v, eps)
+        mre_v = np.nanmean(rel_error_v)
+
+        offset = 0.1
+        fig, axes = plt.subplots(1, 2, figsize=(18, 6))
+
+        # Original
+        ax = axes[0]
+        ax.contourf(
+            self.x, self.y,
+            self.vorticity(U_true, V_true).T,
+            cmap='seismic', levels=100
+        )
+        ax.streamplot(
+            self.x, self.y,
+            U_true.T,
+            V_true.T,
+            color='black', linewidth=1, density=1
+        )
+        ax.set_title(f'Original Trajectory {orig_idx} at t={round(self.t[which_time], 3)}')
+        ax.axis('off')
+        ax.axis([0 - offset, self.Lx + offset, 0 - offset, self.Ly + offset])
+        ax.grid(True)
+        ax.add_patch(
+            patches.Rectangle((0, 0), self.Lx, self.Ly, linewidth=5, edgecolor='black', facecolor='none')
+        )
+        if self.sensor_indices is not None:
+            idx_sensors_x, idx_sensors_y = np.unravel_index(self.sensor_indices, (self.nx, self.ny))
+            sensors_x = self.x[idx_sensors_x]
+            sensors_y = self.y[idx_sensors_y]
+            ax.plot(sensors_x, sensors_y, 'o', mfc='magenta', mec='black', ms=8, mew=1.5, label='Measurement Sites')
+            ax.legend(loc='upper right')
+
+        # Reconstructed
+        ax = axes[1]
+        ax.contourf(
+            self.x, self.y,
+            self.vorticity(U_pred, V_pred).T,
+            cmap='seismic', levels=100
+        )
+        ax.streamplot(
+            self.x, self.y,
+            U_pred.T,
+            V_pred.T,
+            color='black', linewidth=1, density=1
+        )
+        ax.set_title(f'Reconstructed Trajectory {which_trajectory} at t={round(self.t[which_time], 3)}\nMRE U: {mre_u*100:.2f}%, MRE V: {mre_v*100:.2f}%')
+        ax.axis('off')
+        ax.axis([0 - offset, self.Lx + offset, 0 - offset, self.Ly + offset])
+        ax.grid(True)
+        ax.add_patch(
+            patches.Rectangle((0, 0), self.Lx, self.Ly, linewidth=5, edgecolor='black', facecolor='none')
+        )
+        if self.sensor_indices is not None:
+            idx_sensors_x, idx_sensors_y = np.unravel_index(self.sensor_indices, (self.nx, self.ny))
+            sensors_x = self.x[idx_sensors_x]
+            sensors_y = self.y[idx_sensors_y]
+            ax.plot(sensors_x, sensors_y, 'o', mfc='magenta', mec='black', ms=8, mew=1.5, label='Measurement Sites')
+            ax.legend(loc='upper right')
+
+        plt.tight_layout()
+        plt.show()

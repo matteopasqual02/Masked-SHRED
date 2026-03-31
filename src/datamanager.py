@@ -244,6 +244,202 @@ class DataManager:
 
         return train_dataset, val_dataset, test_dataset
 
+# data manager class
+class ROMDataManager:
+
+    def __init__(
+        self,
+        lags: int = 25,             # number of past time steps to use as input
+        train_size: float = 0.8,    # percentage of data to use for training
+        val_size: float = 0.1,      # percentage of data to use for validation
+        test_size: float = 0.1,     # percentage of data to use for testing
+    ):
+        
+        #check that the sizes sum to 1
+        if not abs(train_size + val_size + test_size - 1.0) < 1e-8:
+            raise ValueError("train_size, val_size and test_size must sum to 1")
+        
+        # store the parameters
+        self.lags = lags
+        self.train_size = train_size
+        self.val_size = val_size
+        self.test_size = test_size
+
+        # indices for train/val/test split
+        self.train_indices = None
+        self.val_indices = None
+        self.test_indices = None
+
+        # other params
+        self._dataset_ids = []
+        self.sensor_measurements = None
+        self.data = None
+        self._Vt_registry = {}
+        self._preSVD_scaler_registry = {}   
+        self._dataset_lengths = {}      
+        self._dataset_spatial_shape = {}
+
+    def add_data(
+        self,
+        data: DataInput,
+        id: str,
+        measurements: Optional[np.ndarray] = None,                      # sensor measurements (if None, will be loaded from data)
+        compress: Union[None, bool, int] = True,                        # whether to apply SVD compression to the data (if True, compress to x components; if None or False, do not compress)
+        verbose: bool = False
+    ):
+        #Data are of shape (ntrajectories, ntimes, nstates)
+        
+        # check that the id is unique
+        if id in self._dataset_ids:
+            raise ValueError(f"Dataset with id '{id}' already exists. Please choose a unique id for each dataset.")
+        
+        modes = parse_compress(compress) 
+        data = get_data(data)
+        dataset_spatial_shape = data.shape[-1]  # assume data is (ntraj, ntimes, spatial_dims...)
+
+        # split in parameter dimension (ntrajectories) 
+        if self.train_indices is None:
+            self.train_indices = np.arange(0, int(data.shape[0] * self.train_size))
+            self.val_indices = np.arange(int(data.shape[0] * self.train_size), int(data.shape[0] * (self.train_size + self.val_size)))
+            self.test_indices = np.arange(int(data.shape[0] * (self.train_size + self.val_size)), data.shape[0])
+
+        if measurements is not None:
+            measurements = measurements.reshape(measurements.shape[0], measurements.shape[1], -1)  # ensure measurements are (ntrajectories, ntimes, num_sensors)
+
+        # dimensionality reduction
+        if modes > 0:
+            # Always treat data as 3D: (ntraj, ntimes, nstates)
+            ntraj, ntimes, nstates = data.shape
+            data_reshaped = data.reshape(-1, nstates)  # (ntraj*ntimes, nstates)
+            train_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.train_indices])
+            sc = StandardScaler()
+            sc.fit(data_reshaped[train_rows])
+            data_scaled = sc.transform(data_reshaped)
+            U, S, Vt = randomized_svd(data_scaled[train_rows], n_components=modes, n_iter='auto')
+
+            #plot singular values decay
+            reconstruction = U @ np.diag(S) @ Vt
+            # Use train_rows as in SVD step
+            residual_energy = np.linalg.norm(data_scaled[train_rows] - reconstruction) ** 2 \
+                        / np.linalg.norm(data_scaled[train_rows]) ** 2
+            
+            data_scaled = data_scaled @ Vt.T
+            data = data_scaled.reshape(data.shape[0], data.shape[1], -1)
+
+            if verbose:
+                plt.semilogy(S[:modes], color = 'magenta', linewidth = 2)
+                plt.title("Singular Values Decay \n")
+                plt.show()
+
+            print(f"Residual energy of {id} after keeping {modes} modes: {residual_energy*100:.4f} %")
+
+
+        # commit to self
+        self._dataset_ids.append(id)
+        self._dataset_spatial_shape[self._dataset_ids[-1]] = dataset_spatial_shape
+        if measurements is not None:
+            if self.sensor_measurements is None:
+                self.sensor_measurements = measurements
+            else:
+                self.sensor_measurements = np.hstack((self.sensor_measurements, measurements))
+        if modes > 0:
+            self._preSVD_scaler_registry[self._dataset_ids[-1]] = sc
+            self._Vt_registry[self._dataset_ids[-1]] = Vt
+        self._dataset_lengths[self._dataset_ids[-1]] = data.shape[-1]  # save spatial dim to registry
+        if self.data is None:
+            self.data = data
+        else:
+            self.data = np.concatenate((self.data, data), axis=-1)
+
+
+    def prepare(self, verbose = False, masking_type = None, unused_data = None):
+        # This method will prepare the data for training by applying scaling, generating lagged features, and creating PyTorch datasets for train/val/test splits. It will also handle masking of sensor measurements if specified.
+
+        if self.data is None:
+            raise ValueError("No data found. Please add at least one dataset before calling prepare().")
+
+        print(f"\nDatasets: {self._dataset_ids}")
+        if unused_data is not None:
+            excluded_ids = {unused_data} if isinstance(unused_data, str) else set(unused_data)
+            print(f"Dataset NOT used: {sorted(excluded_ids)}")
+            self._active_dataset_ids = [ids for ids in self._dataset_ids if ids not in excluded_ids]
+        else:
+            self._active_dataset_ids = list(self._dataset_ids)
+
+        if not self._active_dataset_ids:
+            raise ValueError("All datasets were excluded via unused_data; no output targets remain.")
+    
+        data = self.data.reshape(-1,self.data.shape[-1])  # reshape to (ntraj*ntimes, nstates) for scaling
+        sc = MinMaxScaler()
+        sc.fit(data[self.train_indices].reshape(-1, data.shape[-1]))
+        self.data_scaler = sc
+        scaled_data = sc.transform(data.reshape(-1, data.shape[-1])).reshape(data.shape)
+
+        if self.sensor_measurements is None:
+            raise ValueError("No sensor measurements found. Please add at least one dataset with sensor measurements before calling prepare().")
+        
+        sc = MinMaxScaler()
+        sc.fit(self.sensor_measurements[self.train_indices].reshape(-1, self.sensor_measurements.shape[-1]))
+        self.sensor_scaler = sc
+        scaled_sensor_measurements = sc.transform(self.sensor_measurements.reshape(-1, self.sensor_measurements.shape[-1])).reshape(self.sensor_measurements.shape)
+
+        if masking_type is not None:
+            if masking_type == 'grud':
+                scaled_sensor_measurements = generate_GRUD_4D_input(scaled_sensor_measurements)
+                lagged_sensor_measurements = generate_GRUD_4D_lags(scaled_sensor_measurements, self.lags)
+            elif masking_type == 'double_channels':
+                scaled_sensor_measurements = generate_channels(scaled_sensor_measurements)
+                lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
+            else:
+                lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags) 
+        else:
+            lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
+
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        # Robust train/val/test split
+        n_total = lagged_sensor_measurements.shape[0]
+        n_train = int(n_total * self.train_size)
+        n_val = int(n_total * self.val_size)
+        train_indices = np.arange(0, n_train)
+        val_indices = np.arange(n_train, n_train + n_val)
+        test_indices = np.arange(n_train + n_val, n_total)
+
+        Xtrain = torch.tensor(lagged_sensor_measurements[train_indices], dtype=torch.float32, device=device)
+        Ytrain = torch.tensor(scaled_data.reshape(-1, scaled_data.shape[-1])[train_indices], dtype=torch.float32, device=device)
+        Xval = torch.tensor(lagged_sensor_measurements[val_indices], dtype=torch.float32, device=device)
+        Yval = torch.tensor(scaled_data.reshape(-1, scaled_data.shape[-1])[val_indices], dtype=torch.float32, device=device)
+        Xtest = torch.tensor(lagged_sensor_measurements[test_indices], dtype=torch.float32, device=device)
+        Ytest = torch.tensor(scaled_data.reshape(-1, scaled_data.shape[-1])[test_indices], dtype=torch.float32, device=device)
+
+        print("\nNumber of nan values in sensor measurements after masking:", np.isnan(scaled_sensor_measurements).sum())
+
+        if verbose:
+            print(f"\nData shapes after preparation:")
+            print(f"Train:\t {Xtrain.shape} -> {Ytrain.shape}")
+            print(f"Val:\t {Xval.shape} -> {Yval.shape}")
+            print(f"Test:\t {Xtest.shape} -> {Ytest.shape}")
+
+        # return datasets
+        if masking_type is not None and masking_type == 'mask_data':
+            train_dataset = TimeSeriesDatasetWithMask(Xtrain, Ytrain)
+            val_dataset = TimeSeriesDatasetWithMask(Xval, Yval)
+            test_dataset = TimeSeriesDatasetWithMask(Xtest, Ytest)
+        elif masking_type is not None and masking_type == 'mask_data_random':
+            train_dataset = TimeSeriesDatasetWithMask(Xtrain, Ytrain, random=True)
+            val_dataset = TimeSeriesDatasetWithMask(Xval, Yval, random=True)
+            test_dataset = TimeSeriesDatasetWithMask(Xtest, Ytest, random=True)
+        else:
+            train_dataset = TimeSeriesDataset(Xtrain, Ytrain)
+            val_dataset = TimeSeriesDataset(Xval, Yval)
+            test_dataset = TimeSeriesDataset(Xtest, Ytest)
+
+        Xtrain_mean = Xtrain.mean(dim=0, keepdim=True)
+        if masking_type is not None and masking_type == 'grud':
+            return train_dataset, val_dataset, test_dataset, Xtrain_mean
+        return train_dataset, val_dataset, test_dataset
+                                                                                             
+
 # TimeseriesDataset
 class TimeSeriesDataset(torch.utils.data.Dataset):
 
@@ -460,14 +656,29 @@ def get_sensor_measurements(
 
 def generate_lagged_sensor_measurements(sensor_measurements, lags):
     # generate lagged sensor measurements for use as model inputs
-    num_timesteps, num_sensors = sensor_measurements.shape[0], sensor_measurements.shape[1]
+    # Accepts 2D (ntimes, ns) or 3D (ntraj, ntimes, ns) input
 
-    #concatenate zeros to the beginning of the sensor measurements to create lagged features
-    sensor_measurements = np.concatenate((np.zeros((lags, num_sensors)), sensor_measurements), axis=0)
-    lagged_sequences = np.empty((num_timesteps, lags, num_sensors))
-    for i in range(lagged_sequences.shape[0]):
-        lagged_sequences[i] = sensor_measurements[i:i+lags, :]
-    return lagged_sequences
+    if sensor_measurements.ndim == 2:
+        num_timesteps, num_sensors = sensor_measurements.shape
+        # concatenate zeros to the beginning
+        padded = np.concatenate((np.zeros((lags, num_sensors)), sensor_measurements), axis=0)
+        lagged_sequences = np.empty((num_timesteps, lags, num_sensors), dtype=sensor_measurements.dtype)
+        for i in range(num_timesteps):
+            lagged_sequences[i] = padded[i:i+lags, :]
+        return lagged_sequences
+    
+    elif sensor_measurements.ndim == 3:
+        ntraj, ntimes, ns = sensor_measurements.shape
+        xshape = (ntraj, ntimes, lags, ns)
+        lagged_sequences = np.empty(xshape, dtype=sensor_measurements.dtype)
+        for traj in range(ntraj):
+            padded = np.concatenate((np.zeros((lags, ns)), sensor_measurements[traj]), axis=0)
+            for i in range(ntimes):
+                lagged_sequences[traj, i] = padded[i:i+lags, :]
+        return lagged_sequences.reshape(ntraj*ntimes, lags, ns)  # reshape to  (trajectories*timesteps, lags, num_sensors) for use in training
+    
+    else:
+        raise ValueError("sensor_measurements must be 2D or 3D array")
 
 def generate_GRUD_4D_lags(sensor_measurements, lags):
     # generate lagged features for GRUD, which expects a 4D input of shape (N, channels, lags, num_sensors)

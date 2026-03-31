@@ -50,7 +50,11 @@ class SHREDEngine:
             if preSVD_scaler is not None:
                 dataset = preSVD_scaler.inverse_transform(dataset)
 
-            original_shape = (dataset.shape[0],) + spatial_shape
+            # Ensure spatial_shape is always a tuple for reshaping
+            if isinstance(spatial_shape, int):
+                original_shape = (dataset.shape[0], spatial_shape)
+            else:
+                original_shape = (dataset.shape[0],) + tuple(spatial_shape)
             results[id] = dataset.reshape(original_shape)
             start_index += length
 
