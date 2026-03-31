@@ -252,6 +252,39 @@ def evaluate(
 
     return mse, mre
 
+def mre(datatrue, datapred):
+    # Mean Relative Error
+    return ((datatrue - datapred).pow(2).sum(axis = -1).sqrt() 
+        / (datatrue).pow(2).sum(axis = -1).sqrt()).mean()
+
+def mse(datatrue, datapred):
+    # Mean Squared Error
+    return (datatrue - datapred).pow(2).sum(axis=-1).mean() / datatrue.shape[-1]
+
+def evaluate2(
+    model: mSHRED,
+    dataset: torch.utils.data.Dataset,
+    masking_type: Optional[str] = None,
+):
+    
+    #evaluate the model on the given dataset and return the error
+    model.eval()
+    is_mask_data = masking_type == 'mask_data'
+    with torch.no_grad():
+        if is_mask_data:
+            ytrue = dataset.Y
+            ypred = model(dataset.X, dataset.M)
+            e_mre = mre(ytrue, ypred)
+            e_mse = mse(ytrue, ypred)
+        else:
+            ytrue = dataset.Y
+            ypred = model(dataset.X)
+            e_mre = mre(ytrue, ypred)
+            e_mse = mse(ytrue, ypred)
+
+    return e_mse, e_mre
+
+
 def _get_optimizer(params, optimizer: str, lr: float, weight_decay: float):
 
     if optimizer == "AdamW":
