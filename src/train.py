@@ -19,7 +19,7 @@ def fit(
     scheduler_gamma: float = 0.2,
     scheduler_embed_dim: Optional[int] = None,
     scheduler_warmup_steps: Optional[int] = None,
-    weight_decay: float = 0.01,
+    weight_decay: float = 0.005,
     patience: int = 20,
     verbose: bool = True,
     masking_type: Optional[str] = None,
