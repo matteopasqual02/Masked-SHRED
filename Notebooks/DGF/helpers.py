@@ -65,11 +65,14 @@ class DGFsimulation:
         return self.U, self.V
     
 
-    def generate_measurements_U(self, nsensors=3, idx_short_broken=None, idx_long_broken=None, p_short_broken=0.2, verbose=False):
+    def generate_measurements_U(self, nsensors=3, idx_short_broken=None, idx_long_broken=None, p_short_broken=0.2, positions = [], verbose=False):
 
         # Reshape the velocity fields and randomly select sensor locations, then simulate broken sensors by introducing NaN values
         U = self.U.reshape(self.ntrajectories, self.ntimes, self.nstate)
-        self.sensor_indices = np.random.choice(self.nstate, nsensors, replace=False)
+        if len(positions)==0:
+            self.sensor_indices = np.random.choice(self.nstate, nsensors, replace=False)
+        else:
+            self.sensor_indices = positions
         U_measurements = U[:, :, self.sensor_indices].copy()
 
         # Get dimensions
