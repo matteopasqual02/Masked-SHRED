@@ -64,11 +64,72 @@ class DGFsimulation:
 
         return self.U, self.V
     
-    def generate_measurements_U(self, nsensors=3):
+
+    def generate_measurements_U(self, nsensors=3, idx_short_broken=None, idx_long_broken=None, p_short_broken=0.2, verbose=False):
+
+        # Reshape the velocity fields and randomly select sensor locations, then simulate broken sensors by introducing NaN values
         U = self.U.reshape(self.ntrajectories, self.ntimes, self.nstate)
         self.sensor_indices = np.random.choice(self.nstate, nsensors, replace=False)
-        U_measurements = U[:, :, self.sensor_indices]
+        U_measurements = U[:, :, self.sensor_indices].copy()
+
+        # Get dimensions
+        ntimes = U_measurements.shape[1]
+        ntrajectories = U_measurements.shape[0]
+        nsensors = U_measurements.shape[2]
+
+        if idx_short_broken is None:
+            idx_short_broken = []
+        if idx_long_broken is None:
+            idx_long_broken = []
+
+        # Short broken sensors: random nans with probability p_short_broken
+        for idx in idx_short_broken:
+            mask = np.random.rand(ntrajectories, ntimes) < p_short_broken
+            U_measurements[:, :, idx][mask] = np.nan
+
+        # Long broken sensors: one contiguous nan interval per sensor
+        for idx in idx_long_broken:
+            for traj in range(ntrajectories):
+                t1, t2 = np.random.randint(0, ntimes, size=2)
+                t_start, t_end = min(t1, t2), max(t1, t2)
+                if t_end - t_start < 30:
+                    t_end = min(t_start + 38, ntimes-1)
+                U_measurements[traj, t_start:t_end+1, idx] = np.nan
+
+        if verbose:
+            self.plot_data_availability(U_measurements, title_prefix="Sensor Data Availability")
+
         return U_measurements
+
+    def plot_data_availability(self, sensor_data, title_prefix, trajectory=0, sensor_labels=None):
+        traj_idx = min(trajectory, sensor_data.shape[0] - 1)
+        availability = (~np.isnan(sensor_data[traj_idx])).astype(float)
+        time = np.arange(availability.shape[0])
+        nsensors_plot = availability.shape[1]
+
+        if sensor_labels is None:
+            sensor_labels = np.arange(nsensors_plot)
+        sensor_labels = np.asarray(sensor_labels)
+
+        if sensor_labels.shape[0] != nsensors_plot:
+            raise ValueError("sensor_labels length must match number of sensor columns")
+
+        fig_height = max(2.0, 0.6* nsensors_plot)
+        _, ax = plt.subplots(1, 1, figsize=(14, fig_height))
+
+        for sensor_idx in range(nsensors_plot):
+            line = np.where(availability[:, sensor_idx] > 0.5, sensor_idx + 1.0, np.nan)
+            ax.plot(time, line, linewidth=4, solid_capstyle="butt", label=f"S{sensor_labels[sensor_idx]}")
+
+        ax.set_xlabel("Time step")
+        ax.set_ylabel("Sensor")
+        ax.set_yticks(np.arange(1, nsensors_plot + 1))
+        ax.set_yticklabels([f"S{label}" for label in sensor_labels])
+        ax.set_ylim(0.5, nsensors_plot + 0.5)
+        ax.grid(True, axis="x", alpha=0.25)
+        ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), title="Sensors")
+        ax.set_title(f"{title_prefix} (Trajectory {traj_idx})")
+        plt.show()
     
     def get_reshaped_data(self):
         # Reshape the velocity fields into the desired format for training
