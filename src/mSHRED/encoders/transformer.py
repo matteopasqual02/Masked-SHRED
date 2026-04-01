@@ -97,9 +97,10 @@ class MultiHeadAttention(nn.Module):
 
         #3. Scaled dot-product attention (SDPA)
         # Compute attention output using scaled dot-product attention
+        effective_is_causal = is_causal and attn_mask is None
         attn_out = F.scaled_dot_product_attention(
             query, key, value, 
-            attn_mask=attn_mask, dropout_p=(self.dropout if self.training else 0.0), is_causal=is_causal
+            attn_mask=attn_mask, dropout_p=(self.dropout if self.training else 0.0), is_causal=effective_is_causal
         )  
         # Reshape and permute back to the original format
         # (N, n_heads,*, E_head) -> (N,*, n_heads, E_head) -> (N,*, E_total)

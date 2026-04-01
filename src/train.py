@@ -31,7 +31,7 @@ def fit(
 
     # train loader 
     has_val = val_dataset is not None
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     if has_val:
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
 
@@ -285,7 +285,7 @@ def fit2(
 
     # train loader 
     has_val = val_dataset is not None
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
     # criterion, optimizer, and scheduler
     criterion = torch.nn.MSELoss()          # used for backward pass

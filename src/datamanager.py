@@ -83,6 +83,12 @@ class DataManager:
         data = get_data(data)
         dataset_spatial_shape = data.shape[1:]  # assume data is (time, spatial_dims...)
 
+        if self.train_indices is not None and len(data) != len(self.train_indices) + len(self.val_indices) + len(self.test_indices):
+            raise ValueError(
+                "All datasets added to DataManager must have the same number of timesteps. "
+                f"Expected {len(self.train_indices) + len(self.val_indices) + len(self.test_indices)}, got {len(data)} for dataset '{id}'."
+            )
+
         #indices for train/val/test split
         self.train_indices = self.train_indices if self.train_indices is not None else np.arange(0, int(len(data) * self.train_size))
         self.val_indices = self.val_indices if self.val_indices is not None else np.arange(int(len(data) * self.train_size), int(len(data) * (self.train_size + self.val_size)))
@@ -296,6 +302,12 @@ class ROMDataManager:
         modes = parse_compress(compress) 
         data = get_data(data)
         dataset_spatial_shape = data.shape[-1]  # assume data is (ntraj, ntimes, spatial_dims...)
+
+        if self.train_indices is not None and data.shape[0] != len(self.train_indices) + len(self.val_indices) + len(self.test_indices):
+            raise ValueError(
+                "All datasets added to ROMDataManager must have the same number of trajectories. "
+                f"Expected {len(self.train_indices) + len(self.val_indices) + len(self.test_indices)}, got {data.shape[0]} for dataset '{id}'."
+            )
 
         # split in parameter dimension (ntrajectories) 
         if self.train_indices is None:
@@ -610,8 +622,20 @@ def get_sensor_measurements(
             measurements = measurements.detach().cpu().numpy()
         if not isinstance(measurements, np.ndarray):
             raise ValueError("measurements must be a numpy array or torch tensor of shape (time, num_sensors)")
+        if measurements.ndim != 2:
+            raise ValueError("measurements must be a 2D array of shape (time, num_sensors)")
         if measurements.shape[0] != data.shape[0]:
+            if measurements.shape[1] == data.shape[0]:
+                raise ValueError(
+                    "measurements appears transposed. Expected shape (time, num_sensors), "
+                    "but got (num_sensors, time)."
+                )
             raise ValueError("measurements must have the same number of time steps as the data")
+        if measurements.shape[1] == data.shape[0]:
+            raise ValueError(
+                "Ambiguous measurements shape (time == num_sensors). "
+                "Pass measurements explicitly as (time, num_sensors) with non-ambiguous dimensions."
+            )
 
         if imputer is not None:
             if train_indices is None:
@@ -657,14 +681,14 @@ def get_sensor_measurements(
         'sensor_measurements_df': sensor_measurements_df
     }
 
-def generate_lagged_sensor_measurements(sensor_measurements, lags):
+def generate_lagged_sensor_measurements(sensor_measurements, lags, pad_value=0.0):
     # generate lagged sensor measurements for use as model inputs
     # Accepts 2D (ntimes, ns) or 3D (ntraj, ntimes, ns) input
 
     if sensor_measurements.ndim == 2:
         num_timesteps, num_sensors = sensor_measurements.shape
-        # concatenate zeros to the beginning
-        padded = np.concatenate((np.zeros((lags, num_sensors)), sensor_measurements), axis=0)
+        # prepend a lag window so each sample has exactly `lags` past steps
+        padded = np.concatenate((np.full((lags, num_sensors), pad_value, dtype=sensor_measurements.dtype), sensor_measurements), axis=0)
         lagged_sequences = np.empty((num_timesteps, lags, num_sensors), dtype=sensor_measurements.dtype)
         for i in range(num_timesteps):
             lagged_sequences[i] = padded[i:i+lags, :]
@@ -675,7 +699,7 @@ def generate_lagged_sensor_measurements(sensor_measurements, lags):
         xshape = (ntraj, ntimes, lags, ns)
         lagged_sequences = np.empty(xshape, dtype=sensor_measurements.dtype)
         for traj in range(ntraj):
-            padded = np.concatenate((np.zeros((lags, ns)), sensor_measurements[traj]), axis=0)
+            padded = np.concatenate((np.full((lags, ns), pad_value, dtype=sensor_measurements.dtype), sensor_measurements[traj]), axis=0)
             for i in range(ntimes):
                 lagged_sequences[traj, i] = padded[i:i+lags, :]
         return lagged_sequences.reshape(ntraj*ntimes, lags, ns)  # reshape to  (trajectories*timesteps, lags, num_sensors) for use in training
@@ -688,8 +712,12 @@ def generate_GRUD_4D_lags(sensor_measurements, lags):
     
     channels, num_timesteps, num_sensors = sensor_measurements.shape
 
-    #concatenate zeros to the beginning of the sensor measurements along the temporal axis to create lagged features
-    sensor_measurements = np.concatenate((np.zeros((channels, lags, num_sensors)), sensor_measurements), axis=1)
+    # Build a padded prefix that preserves GRUD channel semantics:
+    # X/X_last_obsv/Mask start at 0, while Delta increases with age in the padded history.
+    pad = np.zeros((channels, lags, num_sensors), dtype=sensor_measurements.dtype)
+    if channels >= 4:
+        pad[3] = np.arange(lags, 0, -1, dtype=sensor_measurements.dtype).reshape(lags, 1)
+    sensor_measurements = np.concatenate((pad, sensor_measurements), axis=1)
     lagged_sequences = np.empty((num_timesteps, channels, lags, num_sensors))
     for i in range(num_timesteps):
         # sensor_measurements[:,i:i+lags,:] has shape (channels, lags, num_sensors)
