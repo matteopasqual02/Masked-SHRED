@@ -78,10 +78,10 @@ class SHREDEngine:
         # Return a dictionary mapping dataset IDs to their corresponding reconstructed physical states
         return results
 
-    def evaluate(self,sensor_measurements, Y):
+    def engine_evaluate(self,test_dataset : Dataset, Y):
         
         # 1) Get the model's reconstruction in raw space
-        recon_dict = self.sensor_to_reconstruction(sensor_measurements)   # dict[id] -> (T, *spatial_shape)
+        recon_dict = self.sensor_to_reconstruction_dataset(test_dataset)   # dict[id] -> (T, *spatial_shape)
         
         # 2) Compute stats
         records = []

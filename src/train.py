@@ -1,4 +1,5 @@
 from typing import Union, List, Tuple, Optional #type: ignore
+import copy                                     #type: ignore
 import torch                                    #type: ignore
 from torch.utils.data import DataLoader         #type: ignore
 from tqdm import tqdm                           #type: ignore
@@ -57,7 +58,7 @@ def fit(
         # early stopping variables
         best_val_loss = float('inf')
         patience_counter = 0
-        best_params = model.state_dict()
+        best_params = copy.deepcopy(model.state_dict())  # deep copy to avoid reference issues
 
     # start training loop
     print("Starting training...")
@@ -173,7 +174,7 @@ def fit(
             # If the validation loss has improved, save the model parameters and reset the patience counter
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                best_params = model.state_dict()
+                best_params = copy.deepcopy(model.state_dict())  # deep copy to avoid reference issues
                 patience_counter = 0
             # If the validation loss has not improved, increment the patience counter
             else:
@@ -308,7 +309,7 @@ def fit2(
         # early stopping variables
         best_val_loss = float('inf')
         patience_counter = 0
-        best_params = model.state_dict()
+        best_params = copy.deepcopy(model.state_dict())  # deep copy to avoid reference issues
 
     # start training loop
     print("Starting training...")
@@ -405,7 +406,7 @@ def fit2(
             # If the validation loss has improved, save the model parameters and reset the patience counter
             if val_loss < best_val_loss:
                 best_val_loss = val_loss
-                best_params = model.state_dict()
+                best_params = copy.deepcopy(model.state_dict())  # deep copy to avoid reference issues
                 patience_counter = 0
             # If the validation loss has not improved, increment the patience counter
             else:
