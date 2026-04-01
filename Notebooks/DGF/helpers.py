@@ -2,7 +2,7 @@
 import numpy as np  # type: ignore
 import matplotlib.pyplot as plt  # type: ignore
 from matplotlib import patches  # type: ignore
-
+import torch  # type: ignore
 
 class DGFsimulation:
 
@@ -215,7 +215,11 @@ class DGFsimulation:
         else:
             orig_idx = which_trajectory
 
-        # Compute mean relative error (MRE) for U and V using the provided formula
+        # compute the mre of the test set
+        mre_u = mre(self.Ureshaped[test_indices], U_recon)
+        mre_v = mre(self.Vreshaped[test_indices], V_recon)
+        print(f"Mean Relative Error (MRE): \tU: {mre_u*100:.3f}%\tV: {mre_v*100:.3f}%")
+        
         U_true = self.U[orig_idx, which_time]
         V_true = self.V[orig_idx, which_time]
         U_pred = Urecon[which_trajectory, which_time]
@@ -264,7 +268,7 @@ class DGFsimulation:
             V_pred.T,
             color='black', linewidth=1, density=1
         )
-        ax.set_title(f'Reconstructed Trajectory {which_trajectory} at t={round(self.t[which_time], 3)} ')
+        ax.set_title(f'Reconstructed Trajectory {which_trajectory} at t={round(self.t[which_time], 3)}')
         ax.axis('off')
         ax.axis([0 - offset, self.Lx + offset, 0 - offset, self.Ly + offset])
         ax.grid(True)
@@ -280,3 +284,16 @@ class DGFsimulation:
 
         plt.tight_layout()
         plt.show()
+
+
+def mre(datatrue, datapred):
+    # Mean Relative Error
+    datatrue = datatrue.reshape(-1, datatrue.shape[-1])
+    datapred = datapred.reshape(-1, datapred.shape[-1])
+    datatrue = torch.from_numpy(datatrue) 
+    datapred = torch.from_numpy(datapred)
+    eps = torch.finfo(datatrue.dtype).eps
+    numerator = (datatrue - datapred).pow(2).sum(axis=-1).sqrt()
+    denominator = (datatrue).pow(2).sum(axis=-1).sqrt().clamp_min(eps)
+    mre = (numerator / denominator).mean().item()
+    return mre

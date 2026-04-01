@@ -369,11 +369,15 @@ class ROMDataManager:
         if not self._active_dataset_ids:
             raise ValueError("All datasets were excluded via unused_data; no output targets remain.")
     
-        data = self.data.reshape(-1,self.data.shape[-1])  # reshape to (ntraj*ntimes, nstates) for scaling
+        # Flatten (ntraj, ntimes, nstates) -> (ntraj*ntimes, nstates),
+        # but fit using all time rows that belong to train trajectories.
+        ntraj, ntimes, nstates = self.data.shape
+        data = self.data.reshape(-1, nstates)
+        train_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.train_indices])
         sc = MinMaxScaler()
-        sc.fit(data[self.train_indices].reshape(-1, data.shape[-1]))
+        sc.fit(data[train_rows])
         self.data_scaler = sc
-        scaled_data = sc.transform(data.reshape(-1, data.shape[-1])).reshape(data.shape)
+        scaled_data = sc.transform(data).reshape(ntraj, ntimes, nstates)
 
         if self.sensor_measurements is None:
             raise ValueError("No sensor measurements found. Please add at least one dataset with sensor measurements before calling prepare().")
@@ -397,20 +401,19 @@ class ROMDataManager:
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-        # Robust train/val/test split
-        n_total = lagged_sensor_measurements.shape[0]
-        n_train = int(n_total * self.train_size)
-        n_val = int(n_total * self.val_size)
-        train_indices = np.arange(0, n_train)
-        val_indices = np.arange(n_train, n_train + n_val)
-        test_indices = np.arange(n_train + n_val, n_total)
+        # Map trajectory splits to flattened sample rows so X/Y use the same split policy as add_data.
+        train_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.train_indices])
+        val_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.val_indices])
+        test_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.test_indices])
 
-        Xtrain = torch.tensor(lagged_sensor_measurements[train_indices], dtype=torch.float32, device=device)
-        Ytrain = torch.tensor(scaled_data.reshape(-1, scaled_data.shape[-1])[train_indices], dtype=torch.float32, device=device)
-        Xval = torch.tensor(lagged_sensor_measurements[val_indices], dtype=torch.float32, device=device)
-        Yval = torch.tensor(scaled_data.reshape(-1, scaled_data.shape[-1])[val_indices], dtype=torch.float32, device=device)
-        Xtest = torch.tensor(lagged_sensor_measurements[test_indices], dtype=torch.float32, device=device)
-        Ytest = torch.tensor(scaled_data.reshape(-1, scaled_data.shape[-1])[test_indices], dtype=torch.float32, device=device)
+        scaled_data_flat = scaled_data.reshape(-1, scaled_data.shape[-1])
+
+        Xtrain = torch.tensor(lagged_sensor_measurements[train_rows], dtype=torch.float32, device=device)
+        Ytrain = torch.tensor(scaled_data_flat[train_rows], dtype=torch.float32, device=device)
+        Xval = torch.tensor(lagged_sensor_measurements[val_rows], dtype=torch.float32, device=device)
+        Yval = torch.tensor(scaled_data_flat[val_rows], dtype=torch.float32, device=device)
+        Xtest = torch.tensor(lagged_sensor_measurements[test_rows], dtype=torch.float32, device=device)
+        Ytest = torch.tensor(scaled_data_flat[test_rows], dtype=torch.float32, device=device)
 
         print("\nNumber of nan values in sensor measurements after masking:", np.isnan(scaled_sensor_measurements).sum())
 
