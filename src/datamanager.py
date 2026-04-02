@@ -291,7 +291,8 @@ class ROMDataManager:
         id: str,
         measurements: Optional[np.ndarray] = None,                      # sensor measurements (if None, will be loaded from data)
         compress: Union[None, bool, int] = True,                        # whether to apply SVD compression to the data (if True, compress to x components; if None or False, do not compress)
-        verbose: bool = False
+        verbose: bool = False,
+        scaler: str = 'standard',                                       # scaler to apply before SVD (if None, no scaling is applied; if 'standard', StandardScaler is applied; if 'minmax', MinMaxScaler is applied)
     ):
         #Data are of shape (ntrajectories, ntimes, nstates)
         
@@ -324,7 +325,12 @@ class ROMDataManager:
             ntraj, ntimes, nstates = data.shape
             data_reshaped = data.reshape(-1, nstates)  # (ntraj*ntimes, nstates)
             train_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.train_indices])
-            sc = MinMaxScaler()
+            if scaler == 'standard':
+                sc = StandardScaler()
+            elif scaler == 'minmax':
+                sc = MinMaxScaler()
+            else:
+                raise ValueError(f"Unsupported scaler '{scaler}'. Supported options are 'standard' and 'minmax'.")
             sc.fit(data_reshaped[train_rows])
             data_scaled = sc.transform(data_reshaped)
             U, S, Vt = randomized_svd(data_scaled[train_rows], n_components=modes, n_iter='auto')
@@ -681,32 +687,47 @@ def get_sensor_measurements(
         'sensor_measurements_df': sensor_measurements_df
     }
 
-def generate_lagged_sensor_measurements(sensor_measurements, lags, pad_value=0.0):
-    # generate lagged sensor measurements for use as model inputs
-    # Accepts 2D (ntimes, ns) or 3D (ntraj, ntimes, ns) input
-
+def generate_lagged_sensor_measurements(sensor_measurements, lags):
+    
     if sensor_measurements.ndim == 2:
-        num_timesteps, num_sensors = sensor_measurements.shape
-        pad_len = max(lags - 1, 0)
-        padded = np.concatenate((np.full((pad_len, num_sensors), pad_value, dtype=sensor_measurements.dtype), sensor_measurements), axis=0)
-        lagged_sequences = np.empty((num_timesteps, lags, num_sensors), dtype=sensor_measurements.dtype)
-        for i in range(num_timesteps):
-            lagged_sequences[i] = padded[i:i+lags, :]
-        return lagged_sequences
+
+        # sensor_measurements is of shape (time, num_sensors)
+        ntimes, num_sensors = sensor_measurements.shape
+        # we want to generate a new array of shape (time, lags, num_sensors) 
+        # where each entry contains the sensor measurements for the current and previous lags time steps
+        data_out = np.zeros((ntimes, lags, num_sensors), dtype=sensor_measurements.dtype)
+
+        # loop over time steps to fill in the lagged features
+        for j in range(1, ntimes + 1):
+            if j < lags:
+                data_out[j - 1, -j:] = sensor_measurements[:j]
+            else:
+                data_out[j - 1] = sensor_measurements[j - lags : j]
+
+        return data_out
     
-    elif sensor_measurements.ndim == 3:
-        ntraj, ntimes, ns = sensor_measurements.shape
-        xshape = (ntraj, ntimes, lags, ns)
-        lagged_sequences = np.empty(xshape, dtype=sensor_measurements.dtype)
-        pad_len = max(lags - 1, 0)
-        for traj in range(ntraj):
-            padded = np.concatenate((np.full((pad_len, ns), pad_value, dtype=sensor_measurements.dtype), sensor_measurements[traj]), axis=0)
-            for i in range(ntimes):
-                lagged_sequences[traj, i] = padded[i:i+lags, :]
-        return lagged_sequences.reshape(ntraj*ntimes, lags, ns)  # reshape to  (trajectories*timesteps, lags, num_sensors) for use in training
+    if sensor_measurements.ndim == 3:
+
+        # sensor_measurements is of shape (ntraj, ntimes, num_sensors)
+        ntraj, ntimes, num_sensors = sensor_measurements.shape
+        # we want to generate a new array of shape (ntraj*ntimes, lags, num_sensors)
+        # where each entry contains the sensor measurements for the current and previous lags time steps, 
+        # and we treat each trajectory independently when generating the lagged features
+        data_out = np.zeros((ntraj * ntimes, lags, num_sensors), dtype=sensor_measurements.dtype)
+
+        # loop over trajectories and time steps to fill in the lagged features, 
+        # treating each trajectory independently
+        for i in range(ntraj):
+            for j in range(1, ntimes + 1):
+                if j < lags:
+                    data_out[i * ntimes + j - 1, -j:] = sensor_measurements[i, :j]
+                else:
+                    data_out[i * ntimes + j - 1] = sensor_measurements[i, j - lags : j]
+
+        return data_out
     
-    else:
-        raise ValueError("sensor_measurements must be 2D or 3D array")
+    # if sensor_measurements has an unexpected number of dimensions, raise an error
+    raise ValueError("sensor_measurements must be 2D or 3D array")
 
 def generate_GRUD_4D_lags(sensor_measurements, lags):
     # generate lagged features for GRUD, which expects a 4D input of shape (N, channels, lags, num_sensors)
