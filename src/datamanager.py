@@ -324,7 +324,7 @@ class ROMDataManager:
             ntraj, ntimes, nstates = data.shape
             data_reshaped = data.reshape(-1, nstates)  # (ntraj*ntimes, nstates)
             train_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.train_indices])
-            sc = StandardScaler()
+            sc = MinMaxScaler()
             sc.fit(data_reshaped[train_rows])
             data_scaled = sc.transform(data_reshaped)
             U, S, Vt = randomized_svd(data_scaled[train_rows], n_components=modes, n_iter='auto')
