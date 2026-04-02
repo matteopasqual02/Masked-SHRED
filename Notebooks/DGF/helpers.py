@@ -69,7 +69,7 @@ class DGFsimulation:
 
         # Reshape the velocity fields and randomly select sensor locations, then simulate broken sensors by introducing NaN values
         U = self.U.reshape(self.ntrajectories, self.ntimes, self.nstate)
-        if len(positions)==0:
+        if len(positions)<nsensors:
             self.sensor_indices = np.random.choice(self.nstate, nsensors, replace=False)
         else:
             self.sensor_indices = positions
@@ -103,6 +103,45 @@ class DGFsimulation:
             self.plot_data_availability(U_measurements, title_prefix="Sensor Data Availability")
 
         return U_measurements
+    
+    def generate_measurements_V(self, nsensors=3, idx_short_broken=None, idx_long_broken=None, p_short_broken=0.2, positions = [], verbose=False):  
+        
+        # Reshape the velocity fields and randomly select sensor locations, then simulate broken sensors by introducing NaN values
+        V = self.V.reshape(self.ntrajectories, self.ntimes, self.nstate)
+        if len(positions)<nsensors:
+            self.sensor_indices = np.random.choice(self.nstate, nsensors, replace=False)
+        else:
+            self.sensor_indices = positions
+        V_measurements = V[:,:, self.sensor_indices].copy()
+
+        # Get dimensions
+        ntimes = V_measurements.shape[1]
+        ntrajectories = V_measurements.shape[0]
+        nsensors = V_measurements.shape[2]
+
+        if idx_short_broken is None:
+            idx_short_broken = []
+        if idx_long_broken is None:
+            idx_long_broken = []    
+
+        # Short broken sensors: random nans with probability p_short_broken
+        for idx in idx_short_broken:
+            mask = np.random.rand(ntrajectories, ntimes) < p_short_broken
+            V_measurements[:, :, idx][mask] = np.nan    
+
+        # Long broken sensors: one contiguous nan interval per sensor
+        for idx in idx_long_broken:
+            for traj in range(ntrajectories):
+                t1, t2 = np.random.randint(0, ntimes, size=2)
+                t_start, t_end = min(t1, t2), max(t1, t2)
+                if t_end - t_start < 30:
+                    t_end = min(t_start + 38, ntimes-1)
+                V_measurements[traj, t_start:t_end+1, idx] = np.nan
+
+        if verbose:
+            self.plot_data_availability(V_measurements, title_prefix="Sensor Data Availability")
+
+        return V_measurements
 
     def plot_data_availability(self, sensor_data, title_prefix, trajectory=0, sensor_labels=None):
         traj_idx = min(trajectory, sensor_data.shape[0] - 1)
@@ -197,7 +236,7 @@ class DGFsimulation:
             plt.legend(loc='upper right')
         plt.show()
 
-    def plot_comparison(self, test_reconstruction, test_indices, which_trajectory, which_time=-1):
+    def plot_comparison(self, test_reconstruction, test_idx, which_trajectory=-1, which_time=-1, verbose=False):
         # Extract the reconstructed U and V fields for the specified trajectory and time
         U_recon, V_recon = test_reconstruction["U"], test_reconstruction["V"]
         Urecon = U_recon.reshape(-1, self.ntimes, self.nx, self.ny)
@@ -210,10 +249,13 @@ class DGFsimulation:
             return
 
         # Map reconstructed index to original index
-        if test_indices is not None:
-            orig_idx = test_indices[which_trajectory]
-        else:
-            orig_idx = which_trajectory
+        test_indices = test_idx if isinstance(test_idx, np.ndarray) else np.array(test_idx)
+
+        if verbose:
+            print(f"Test indices: {test_indices}")
+        orig_idx = test_indices[which_trajectory]
+        if verbose:
+            print(f"Original trajectory index corresponding to reconstructed trajectory {which_trajectory}: {orig_idx}")
 
         # compute the mre of the test set
         mre_u = mre(self.Ureshaped[test_indices], U_recon)
@@ -290,8 +332,10 @@ def mre(datatrue, datapred):
     # Mean Relative Error
     datatrue = datatrue.reshape(-1, datatrue.shape[-1])
     datapred = datapred.reshape(-1, datapred.shape[-1])
-    datatrue = torch.from_numpy(datatrue) 
-    datapred = torch.from_numpy(datapred)
+    if isinstance(datatrue, np.ndarray):
+        datatrue = torch.from_numpy(datatrue) 
+    if isinstance(datapred, np.ndarray):
+        datapred = torch.from_numpy(datapred)
     eps = torch.finfo(datatrue.dtype).eps
     numerator = (datatrue - datapred).pow(2).sum(axis=-1).sqrt()
     denominator = (datatrue).pow(2).sum(axis=-1).sqrt().clamp_min(eps)
