@@ -687,8 +687,8 @@ def generate_lagged_sensor_measurements(sensor_measurements, lags, pad_value=0.0
 
     if sensor_measurements.ndim == 2:
         num_timesteps, num_sensors = sensor_measurements.shape
-        # prepend a lag window so each sample has exactly `lags` past steps
-        padded = np.concatenate((np.full((lags, num_sensors), pad_value, dtype=sensor_measurements.dtype), sensor_measurements), axis=0)
+        pad_len = max(lags - 1, 0)
+        padded = np.concatenate((np.full((pad_len, num_sensors), pad_value, dtype=sensor_measurements.dtype), sensor_measurements), axis=0)
         lagged_sequences = np.empty((num_timesteps, lags, num_sensors), dtype=sensor_measurements.dtype)
         for i in range(num_timesteps):
             lagged_sequences[i] = padded[i:i+lags, :]
@@ -698,8 +698,9 @@ def generate_lagged_sensor_measurements(sensor_measurements, lags, pad_value=0.0
         ntraj, ntimes, ns = sensor_measurements.shape
         xshape = (ntraj, ntimes, lags, ns)
         lagged_sequences = np.empty(xshape, dtype=sensor_measurements.dtype)
+        pad_len = max(lags - 1, 0)
         for traj in range(ntraj):
-            padded = np.concatenate((np.full((lags, ns), pad_value, dtype=sensor_measurements.dtype), sensor_measurements[traj]), axis=0)
+            padded = np.concatenate((np.full((pad_len, ns), pad_value, dtype=sensor_measurements.dtype), sensor_measurements[traj]), axis=0)
             for i in range(ntimes):
                 lagged_sequences[traj, i] = padded[i:i+lags, :]
         return lagged_sequences.reshape(ntraj*ntimes, lags, ns)  # reshape to  (trajectories*timesteps, lags, num_sensors) for use in training
