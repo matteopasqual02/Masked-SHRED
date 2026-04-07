@@ -1,5 +1,4 @@
 import numpy as np  #type: ignore
-import torch        #type: ignore
 
 def get_train_medians(Xtrain):
     # compute the median of each sensor using numpy
@@ -11,6 +10,20 @@ def get_train_medians(Xtrain):
 
     return medians
 
+def get_train_medians_3D(X_train):
+    
+    # Calculate median across Batch (axis 0) and Time (axis 1) dimensions
+    # to obtain a specific median value for each individual sensor.
+    # Reshape to combine batch and time dimensions, then compute median
+    X_reshaped = X_train.reshape(-1, X_train.shape[2])  # Shape: (batch*time, sensors)
+    medians = np.nanmedian(X_reshaped, axis=0)
+    
+    # Handle edge case: if a sensor is entirely NaN in the training set,
+    # fill its median with 0.0 to prevent propagating NaNs during transform.
+    medians = np.nan_to_num(medians, nan=0.0)
+
+    return medians
+    
 def get_train_means(Xtrain):
     # compute the mean of each sensor using numpy
     # input shape is (n_samples, n_sensors) or (n_samples, n_timestamps, n_sensors)
@@ -18,6 +31,20 @@ def get_train_means(Xtrain):
     X_reshaped = Xtrain.reshape(-1, Xtrain.shape[-1])      # reshape to (n_samples * n_timestamps, n_sensors) if 3D
     means = np.nanmean(X_reshaped, axis=0)                 # compute mean along the first dimension, ignoring NaNs
     means = np.nan_to_num(means, nan=0.0)                  # replace NaNs with 0.0
+
+    return means
+
+def get_train_means_3D(X_train):
+    
+    # Calculate mean across Batch (axis 0) and Time (axis 1) dimensions
+    # to obtain a specific mean value for each individual sensor.
+    # Reshape to combine batch and time dimensions, then compute mean
+    X_reshaped = X_train.reshape(-1, X_train.shape[2])  # Shape: (batch*time, sensors)
+    means = np.nanmean(X_reshaped, axis=0)           # Compute mean while ignoring NaNs
+    
+    # Handle edge case: if a sensor is entirely NaN in the training set,
+    # fill its mean with 0.0 to prevent propagating NaNs during transform.
+    means = np.nan_to_num(means, nan=0.0)
 
     return means
 
@@ -34,35 +61,73 @@ def apply_imputation(X, medians):
 
     return X_imputed
 
+def apply_imputation_3D(X, medians):
+    # Create a copy to prevent overwriting the original input array
+    X_imputed = X.copy()
+
+    # Locate the indices where values are NaN
+    nan_indices = np.where(np.isnan(X_imputed))
+
+    # Replace NaNs by mapping the sensor index (nan_indices[2])
+    # to its corresponding pre-calculated statistic value.
+    X_imputed[nan_indices] = medians[nan_indices[2]]
+    return X_imputed
+
 def median_imputer_single_dataset(X, train_idx):
     # compute medians from the training data and apply median imputation to the entire dataset (train, val, test)
 
-    Xtrain = X[train_idx]                       # extract training data using train indices
-    medians = get_train_medians(Xtrain)         # compute medians from the training data
-    X_imputed = apply_imputation(X, medians)    # apply median imputation to the entire dataset
-
+    if X.ndim == 2:
+        Xtrain = X[train_idx]                       # extract training data using train indices
+        medians = get_train_medians(Xtrain)         # compute medians from the training data
+        X_imputed = apply_imputation(X, medians)    # apply median imputation to the entire dataset
+    elif X.ndim == 3:
+        Xtrain = X[train_idx, :, :]                 # extract training data using train indices
+        medians = get_train_medians_3D(Xtrain)      # compute medians from the training data
+        X_imputed = apply_imputation_3D(X, medians) # apply median imputation to the entire dataset
+    else:
+        raise ValueError("Input X must be a 2D or 3D array")
+    
     return X_imputed
 
 def mean_imputer_single_dataset(X, train_idx):
     # compute means from the training data and apply mean imputation to the entire dataset (train, val, test)
 
-    Xtrain = X[train_idx]                       # extract training data using train indices
-    means = get_train_means(Xtrain)             # compute means from the training data
-    X_imputed = apply_imputation(X, means)      # apply mean imputation to the entire dataset
-
+    if X.ndim == 2:
+        Xtrain = X[train_idx]                       # extract training data using train indices
+        means = get_train_means(Xtrain)             # compute means from the training data
+        X_imputed = apply_imputation(X, means)      # apply mean imputation to the entire dataset
+    elif X.ndim == 3:
+        Xtrain = X[train_idx, :, :]                 # extract training data using train indices
+        means = get_train_means_3D(Xtrain)          # compute means from the training data
+        X_imputed = apply_imputation_3D(X, means)   # apply mean imputation to the entire dataset
+    else:
+        raise ValueError("Input X must be a 2D or 3D array")
+    
     return X_imputed
 
 def last_value_imputer_single_dataset(X, train_idx):
     # perform last value imputation on the input data X using the last observed value 
     
     X_imputed = X.copy()                                    # create a copy of X to avoid modifying the original data
-    for sensor_idx in range(X_imputed.shape[1]):
-        ts = X_imputed[:, sensor_idx]                       # extract time series for the current sensor
-        nan_indices = np.where(np.isnan(ts))[0]             # find indices of NaN
-        if len(nan_indices) == 0:
-            continue
-        for idx in nan_indices:
-            ts[idx] = 0.0 if idx == 0 else ts[idx - 1]      # replace NaN with last observed value (or 0.0 if it's the first value)
+    if X_imputed.ndim == 2:
+        for sensor_idx in range(X_imputed.shape[1]):
+            ts = X_imputed[:, sensor_idx]                       # extract time series for the current sensor
+            nan_indices = np.where(np.isnan(ts))[0]             # find indices of NaN
+            if len(nan_indices) == 0:
+                continue
+            for idx in nan_indices:
+                ts[idx] = 0.0 if idx == 0 else ts[idx - 1]      # replace NaN with last observed value (or 0.0 if it's the first value)
+    elif X_imputed.ndim == 3:
+        for sample_idx in range(X_imputed.shape[0]):
+            for sensor_idx in range(X_imputed.shape[2]):
+                ts = X_imputed[sample_idx, :, sensor_idx]        # time series for one sample and one sensor
+                nan_indices = np.where(np.isnan(ts))[0]          # find indices of NaN in this sequence
+                if len(nan_indices) == 0:
+                    continue
+                for idx in nan_indices:
+                    ts[idx] = 0.0 if idx == 0 else ts[idx - 1]   # forward-fill along time for each sample/sensor
+    else:
+        raise ValueError("Input X must be a 2D or 3D array")
 
     return X_imputed
 
@@ -97,6 +162,40 @@ def generate_GRUD_4D_input(measurements):
 
     # stack the channels to create a 4D tensor of shape (4, T, n_sensors)
     GRUD_input = np.stack((X, X_last_obsv, Mask, Delta), axis=0)
+
+    return GRUD_input
+
+def generate_GRUD_4D_input_3D(measurements):
+    # generate a 3D input tensor for GRUD from the original measurements
+    # input shape: (n_samples, T, n_sensors)
+    # output shape: (n_samples, T, 4, n_sensors) where the 4 channels are [X, X_last_obsv, Mask, Delta]
+
+    n_samples, T, n_sensors = measurements.shape
+    Mask = (~np.isnan(measurements)).astype(float)                  # Mask indicating observed values (1.0 for observed, 0.0 for missing)
+    X = np.nan_to_num(measurements, nan=0.0).astype(np.float32)     # Original measurements with NaNs replaced by 0.0
+
+    X_last_obsv = np.zeros_like(X)                                  # To store the last observed value for each sensor
+    Delta = np.zeros_like(X)                                        # To store the time since last observation for each sensor
+
+    # Iterate through each sample and sensor 
+    for sample_idx in range(n_samples):
+        for sensor_idx in range(n_sensors):
+            last_value = 0.0
+            time_since_last_obs = 0.0
+
+            # Iterate through time steps for the current sample/sensor
+            for t in range(T):
+                if Mask[sample_idx, t, sensor_idx] == 1.0:          # If the value is observed
+                    last_value = X[sample_idx, t, sensor_idx]       # Update last observed value
+                    time_since_last_obs = 0.0                       # Reset time since last observation
+                else:
+                    time_since_last_obs += 1.0                      # Increment time since last observation
+
+                X_last_obsv[sample_idx, t, sensor_idx] = last_value         # Store the last observed value
+                Delta[sample_idx, t, sensor_idx] = time_since_last_obs      # Store the time since last observation
+
+    # stack the channels to create a 4D tensor of shape (n_samples, T, 4, n_sensors)
+    GRUD_input = np.stack((X, X_last_obsv, Mask, Delta), axis=2)
 
     return GRUD_input
 

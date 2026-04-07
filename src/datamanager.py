@@ -8,7 +8,7 @@ from sklearn.utils.extmath import randomized_svd                #type: ignore
 import matplotlib.pyplot as plt                     #type: ignore
 
 from .utils import median_imputer_single_dataset, mean_imputer_single_dataset, last_value_imputer_single_dataset
-from .utils import generate_GRUD_4D_input, generate_channels
+from .utils import generate_GRUD_4D_input, generate_GRUD_4D_input_3D, generate_channels
 
 DEFAULT_MODES = 50
 DataInput = Union[
@@ -291,6 +291,7 @@ class ROMDataManager:
         id: str,
         measurements: Optional[np.ndarray] = None,                      # sensor measurements (if None, will be loaded from data)
         compress: Union[None, bool, int] = True,                        # whether to apply SVD compression to the data (if True, compress to x components; if None or False, do not compress)
+        imputer: Optional[str] = None,                                  # imputation strategy to apply to the provided measurements (if None, no imputation is applied; if 'median', median imputation is applied using the training data)
         verbose: bool = False,
         scaler: str = 'standard',                                       # scaler to apply before SVD (if None, no scaling is applied; if 'standard', StandardScaler is applied; if 'minmax', MinMaxScaler is applied)
     ):
@@ -318,6 +319,21 @@ class ROMDataManager:
 
         if measurements is not None:
             measurements = measurements.reshape(measurements.shape[0], measurements.shape[1], -1)  # ensure measurements are (ntrajectories, ntimes, num_sensors)
+
+            if imputer is not None:
+                if self.train_indices is None:
+                    raise ValueError("train_indices must be provided for median imputation")
+                if imputer == 'median':
+                    measurements = median_imputer_single_dataset(measurements, self.train_indices)
+                elif imputer == 'mean':
+                    measurements = mean_imputer_single_dataset(measurements, self.train_indices)
+                elif imputer == 'last_value':
+                    measurements = last_value_imputer_single_dataset(measurements, self.train_indices)
+                else:
+                    raise ValueError("Unsupported imputation strategy. Supported strategies are 'median', 'mean', and 'last_value'.")      
+
+            # debugging on 3D data after imputation
+            print("Nuber of nan values in measurements after imputation:", np.isnan(measurements).sum())   
 
         # dimensionality reduction
         if modes > 0:
@@ -407,7 +423,7 @@ class ROMDataManager:
 
         if masking_type is not None:
             if masking_type == 'grud':
-                scaled_sensor_measurements = generate_GRUD_4D_input(scaled_sensor_measurements)
+                scaled_sensor_measurements = generate_GRUD_4D_input_3D(scaled_sensor_measurements)
                 lagged_sensor_measurements = generate_GRUD_4D_lags(scaled_sensor_measurements, self.lags)
             elif masking_type == 'double_channels':
                 scaled_sensor_measurements = generate_channels(scaled_sensor_measurements)
@@ -731,17 +747,66 @@ def generate_lagged_sensor_measurements(sensor_measurements, lags):
 
 def generate_GRUD_4D_lags(sensor_measurements, lags):
     # generate lagged features for GRUD, which expects a 4D input of shape (N, channels, lags, num_sensors)
-    
-    channels, num_timesteps, num_sensors = sensor_measurements.shape
 
-    # Build a padded prefix that preserves GRUD channel semantics:
-    # X/X_last_obsv/Mask start at 0, while Delta increases with age in the padded history.
-    pad = np.zeros((channels, lags, num_sensors), dtype=sensor_measurements.dtype)
-    if channels >= 4:
-        pad[3] = np.arange(lags, 0, -1, dtype=sensor_measurements.dtype).reshape(lags, 1)
-    sensor_measurements = np.concatenate((pad, sensor_measurements), axis=1)
-    lagged_sequences = np.empty((num_timesteps, channels, lags, num_sensors))
-    for i in range(num_timesteps):
-        # sensor_measurements[:,i:i+lags,:] has shape (channels, lags, num_sensors)
-        lagged_sequences[i,:,:,:] = sensor_measurements[:,i:i+lags,:]
-    return lagged_sequences
+    # if ndim=3 -> (time, channels, lags, num_sensors)
+    if sensor_measurements.ndim == 3:
+        # Accept both channel-first (channels, time, sensors) and
+        # channel-last (time, channels, sensors) layouts.
+        if sensor_measurements.shape[0] == 4:
+            sensor_cf = sensor_measurements
+        elif sensor_measurements.shape[1] == 4:
+            sensor_cf = np.transpose(sensor_measurements, (1, 0, 2))
+        else:
+            raise ValueError(
+                "For 3D GRUD input, expected shape (4, T, S) or (T, 4, S)."
+            )
+
+        channels, num_timesteps, num_sensors = sensor_cf.shape
+
+        # Build a padded prefix that preserves GRUD channel semantics:
+        # X/X_last_obsv/Mask start at 0, while Delta increases with age in the padded history.
+        pad = np.zeros((channels, lags, num_sensors), dtype=sensor_cf.dtype)
+        if channels >= 4:
+            pad[3] = np.arange(lags, 0, -1, dtype=sensor_cf.dtype).reshape(lags, 1)
+        sensor_cf = np.concatenate((pad, sensor_cf), axis=1)
+        lagged_sequences = np.empty((num_timesteps, channels, lags, num_sensors))
+        for i in range(num_timesteps):
+            # sensor_cf[:, i:i+lags, :] has shape (channels, lags, num_sensors)
+            lagged_sequences[i, :, :, :] = sensor_cf[:, i:i+lags, :]
+        return lagged_sequences
+
+    # if ndim=4 -> (ntraj * time, channels, lags, num_sensors)
+    elif sensor_measurements.ndim == 4:
+        # Accept both channel-first (ntraj, channels, time, sensors) and
+        # channel-last (ntraj, time, channels, sensors) layouts.
+        if sensor_measurements.shape[1] == 4:
+            sensor_cf = sensor_measurements
+        elif sensor_measurements.shape[2] == 4:
+            sensor_cf = np.transpose(sensor_measurements, (0, 2, 1, 3))
+        else:
+            raise ValueError(
+                "For 4D GRUD input, expected shape (N, 4, T, S) or (N, T, 4, S)."
+            )
+
+        num_trajectories, channels, num_timesteps, num_sensors = sensor_cf.shape
+
+        # Build a padded prefix that preserves GRUD channel semantics:
+        # X/X_last_obsv/Mask start at 0, while Delta increases with age in the padded history.
+        pad = np.zeros((num_trajectories, channels, lags, num_sensors), dtype=sensor_cf.dtype)
+        if channels >= 4:
+            pad[:, 3] = np.arange(lags, 0, -1, dtype=sensor_cf.dtype).reshape(1, lags, 1)
+        sensor_cf = np.concatenate((pad, sensor_cf), axis=2)
+
+        # Keep trajectory-major ordering: index = traj_idx * num_timesteps + time_idx.
+        lagged_sequences = np.empty(
+            (num_trajectories, num_timesteps, channels, lags, num_sensors),
+            dtype=sensor_cf.dtype,
+        )
+        for i in range(num_timesteps):
+            # sensor_cf[:, :, i:i+lags, :] has shape (num_trajectories, channels, lags, num_sensors)
+            lagged_sequences[:, i, :, :, :] = sensor_cf[:, :, i:i+lags, :]
+
+        return lagged_sequences.reshape(num_trajectories * num_timesteps, channels, lags, num_sensors)
+    
+    else:
+        raise ValueError("sensor_measurements must be a 3D or 4D array")
