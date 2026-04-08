@@ -157,15 +157,15 @@ def fit(
         if verbose:
             if has_val:
                 pbar.set_postfix({
-                    "Train Loss": f"{train_loss:.4f}", 
-                    "Val Loss": f"{val_loss:.4f}",
+                    "Train Loss": f"{train_loss:.5f}", 
+                    "Val Loss": f"{val_loss:.5f}",
                     "Patience": patience_counter,
-                    "Best Val Loss": f"{best_val_loss:.4f}",
+                    "Best Val Loss": f"{best_val_loss:.5f}",
                     "LR": f"{optimizer.param_groups[0]['lr']:.2e}"
                     })
             else:
                 pbar.set_postfix({
-                    "Train Loss": f"{train_loss:.4f}", 
+                    "Train Loss": f"{train_loss:.5f}", 
                     "LR": f"{optimizer.param_groups[0]['lr']:.2e}"
                     })
     
@@ -389,15 +389,15 @@ def fit2(
         if verbose:
             if has_val:
                 pbar.set_postfix({
-                    "Train Loss": f"{train_loss:.4f}", 
-                    "Val Loss": f"{val_loss:.4f}",
+                    "Train Loss": f"{train_loss:.5f}", 
+                    "Val Loss": f"{val_loss:.5f}",
                     "Patience": patience_counter,
-                    "Best Val Loss": f"{best_val_loss:.4f}",
+                    "Best Val Loss": f"{best_val_loss:.5f}",
                     "LR": f"{optimizer.param_groups[0]['lr']:.2e}"
                     })
             else:
                 pbar.set_postfix({
-                    "Train Loss": f"{train_loss:.4f}", 
+                    "Train Loss": f"{train_loss:.5f}", 
                     "LR": f"{optimizer.param_groups[0]['lr']:.2e}"
                     })
     

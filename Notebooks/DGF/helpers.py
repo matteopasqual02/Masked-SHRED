@@ -65,20 +65,44 @@ class DGFsimulation:
         return self.U, self.V
     
 
-    def generate_measurements_U(self, nsensors=3, idx_short_broken=None, idx_long_broken=None, p_short_broken=0.2, positions = [], verbose=False):
+    def generate_measurements_U(
+        self, 
+        nsensors=3, 
+        idx_short_broken=None, 
+        idx_long_broken=None, 
+        p_short_broken=0.2, 
+        positions=None, 
+        multi_fidelity=None,
+        verbose=False
+    ):
 
         # Reshape the velocity fields and randomly select sensor locations, then simulate broken sensors by introducing NaN values
         U = self.U.reshape(self.ntrajectories, self.ntimes, self.nstate)
-        if len(positions)<nsensors:
+        if positions is None or len(positions)<nsensors:
             self.sensor_indices = np.random.choice(self.nstate, nsensors, replace=False)
         else:
             self.sensor_indices = positions
+
+        # Extract the measurements at the sensor locations
         U_measurements = U[:, :, self.sensor_indices].copy()
+    
 
         # Get dimensions
         ntimes = U_measurements.shape[1]
         ntrajectories = U_measurements.shape[0]
         nsensors = U_measurements.shape[2]
+
+        if multi_fidelity is not None:
+            # Sensor i keeps one sample every fidelity**i time steps.
+            # Example: fidelity=2 -> full, half, quarter, ...
+            for idx in range(nsensors):
+                stride = multi_fidelity ** idx
+                keep_mask = np.zeros(ntimes, dtype=bool)
+                keep_mask[::stride] = True
+                U_measurements[:, ~keep_mask, idx] = np.nan
+                if verbose:
+                    print(f"Sensor {idx} (fidelity {multi_fidelity**idx}): keeping 1 every {stride} time steps, total kept: {keep_mask.sum()} out of {ntimes}"  )
+
 
         if idx_short_broken is None:
             idx_short_broken = []
@@ -104,20 +128,43 @@ class DGFsimulation:
 
         return U_measurements
     
-    def generate_measurements_V(self, nsensors=3, idx_short_broken=None, idx_long_broken=None, p_short_broken=0.2, positions = [], verbose=False):  
+    def generate_measurements_V(
+        self, 
+        nsensors=3, 
+        idx_short_broken=None, 
+        idx_long_broken=None, 
+        p_short_broken=0.2, 
+        positions=None, 
+        multi_fidelity=None,
+        verbose=False
+    ):  
         
         # Reshape the velocity fields and randomly select sensor locations, then simulate broken sensors by introducing NaN values
         V = self.V.reshape(self.ntrajectories, self.ntimes, self.nstate)
-        if len(positions)<nsensors:
+        if positions is None or len(positions)<nsensors:
             self.sensor_indices = np.random.choice(self.nstate, nsensors, replace=False)
         else:
             self.sensor_indices = positions
+
+        # Extract the measurements at the sensor locations
         V_measurements = V[:,:, self.sensor_indices].copy()
 
         # Get dimensions
         ntimes = V_measurements.shape[1]
         ntrajectories = V_measurements.shape[0]
         nsensors = V_measurements.shape[2]
+
+        if multi_fidelity is not None:
+            # Sensor i keeps one sample every fidelity**i time steps.
+            # Example: fidelity=2 -> full, half, quarter, ...
+            for idx in range(nsensors):
+                stride = multi_fidelity ** idx
+                keep_mask = np.zeros(ntimes, dtype=bool)
+                keep_mask[::stride] = True
+                V_measurements[:, ~keep_mask, idx] = np.nan
+                if verbose:
+                    print(f"Sensor {idx} (fidelity {multi_fidelity**idx}): keeping 1 every {stride} time steps, total kept: {keep_mask.sum()} out of {ntimes}"  )
+
 
         if idx_short_broken is None:
             idx_short_broken = []
@@ -161,7 +208,27 @@ class DGFsimulation:
 
         for sensor_idx in range(nsensors_plot):
             line = np.where(availability[:, sensor_idx] > 0.5, sensor_idx + 1.0, np.nan)
-            ax.plot(time, line, linewidth=4, solid_capstyle="butt", label=f"S{sensor_labels[sensor_idx]}")
+            availability_pct = 100.0 * np.mean(availability[:, sensor_idx])
+            plotted_line, = ax.plot(
+                time,
+                line,
+                linewidth=4,
+                solid_capstyle="butt",
+                label=f"S{sensor_labels[sensor_idx]} ({availability_pct:.1f}%)"
+            )
+
+            # Make sparse/isolated available samples visible while preserving the same line style.
+            available_time = np.where(availability[:, sensor_idx] > 0.5)[0]
+            if available_time.size > 0:
+                ax.plot(
+                    available_time,
+                    np.full(available_time.shape, sensor_idx + 1.0),
+                    linestyle="none",
+                    marker="|",
+                    markersize=15,
+                    markeredgewidth=2.5,
+                    color=plotted_line.get_color(),
+                )
 
         ax.set_xlabel("Time step")
         ax.set_ylabel("Sensor")
@@ -169,7 +236,7 @@ class DGFsimulation:
         ax.set_yticklabels([f"S{label}" for label in sensor_labels])
         ax.set_ylim(0.5, nsensors_plot + 0.5)
         ax.grid(True, axis="x", alpha=0.25)
-        ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), title="Sensors")
+        ax.legend(loc="center left", bbox_to_anchor=(1.01, 0.5), title="Sensors (Availability)")
         ax.set_title(f"{title_prefix} (Trajectory {traj_idx})")
         plt.show()
     
