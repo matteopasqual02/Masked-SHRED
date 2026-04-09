@@ -431,7 +431,6 @@ def fit2(
     val_losses_np = torch.tensor(val_losses).detach().cpu().numpy()
     return train_losses_np, val_losses_np
 
-
 def evaluate2(
     model: mSHRED,
     dataset: torch.utils.data.Dataset,
@@ -454,7 +453,6 @@ def evaluate2(
             e_mse = mse(ytrue, ypred)
 
     return e_mse, e_mre
-
 
 def _get_optimizer(params, optimizer: str, lr: float, weight_decay: float):
 
@@ -511,3 +509,133 @@ def _get_lr_scheduler(
     
     else:
         raise ValueError("Unsupported scheduler: {scheduler}. ")
+
+def sparse_fit(
+    model: mSHRED,
+    train_dataset: torch.utils.data.Dataset,
+    val_dataset: torch.utils.data.Dataset,
+    batch_size: int = 64,
+    num_epochs: int = 200,
+    lr: float = 1e-3,
+    optimizer: str = 'AdamW',
+    lr_scheduler: Optional[str] = None,
+    scheduler_step_size: int = 10,
+    scheduler_gamma: float = 0.2,
+    scheduler_embed_dim: Optional[int] = None,
+    scheduler_warmup_steps: Optional[int] = None,
+    weight_decay: float = 0.005,
+    patience: int = 20,
+    verbose: bool = True,
+    sparse_factor: int = 4,
+):
+    # get device
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = model.to(device)
+
+    # data loaders
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
+
+    # criterion, optimizer, and scheduler
+    criterion = torch.nn.MSELoss()
+    val_criterion = torch.nn.MSELoss(reduction='sum')
+    optimizer = _get_optimizer(model.parameters(), optimizer, lr, weight_decay)
+    scheduler = None
+    if lr_scheduler is not None:
+        scheduler = _get_lr_scheduler(
+            optimizer=optimizer,
+            scheduler=lr_scheduler,
+            step_size=scheduler_step_size,
+            gamma=scheduler_gamma,
+            embed_dim=scheduler_embed_dim,
+            warmup_steps=scheduler_warmup_steps,
+        )
+
+    train_losses = []
+    val_losses = []
+    best_val_loss = float('inf')
+    patience_counter = 0
+    best_params = copy.deepcopy(model.state_dict())
+
+    print("Starting SPARSE training...")
+    pbar = tqdm(range(num_epochs), desc="Training", disable=not verbose)
+    for epoch in pbar:
+
+        # --- Train ---
+        model.train()
+        for batch in train_loader:
+            X, M, Y = [t.to(device) for t in batch]
+            B, T, F = M.shape
+
+            # Valid sensors per trajectory: (B, F), 1 if sensor is active in any time step
+            valid = (M.sum(dim=1) > 0).float()
+            # Random scores only on valid positions, then pick top sparse_factor per trajectory
+            noise = torch.rand(B, F, device=device) * valid
+            _, topk_idx = noise.topk(min(sparse_factor, F), dim=-1)   # (B, k)
+            # Build (B, F) mask, only set where sensor was originally valid
+            traj_mask = torch.zeros(B, F, device=device)
+            traj_mask.scatter_(-1, topk_idx, valid.gather(-1, topk_idx))
+            # Expand to (B, T, F) and apply
+            M_sparse = traj_mask.unsqueeze(1).expand(B, T, F) * M
+            X = X * M_sparse
+
+            optimizer.zero_grad()
+            outputs = model(X, M_sparse)
+            loss = criterion(outputs, Y)
+            loss.backward()
+            optimizer.step()
+
+        # --- Evaluate ---
+        model.eval()
+        with torch.no_grad():
+
+            train_loss, train_elements = 0.0, 0
+            for batch in train_loader:
+                X, M, Y = [t.to(device) for t in batch]
+                outputs = model(X, M)
+                train_loss += val_criterion(outputs, Y).item()
+                train_elements += Y.numel()
+            train_loss /= train_elements
+            train_losses.append(train_loss)
+
+            val_loss, val_elements = 0.0, 0
+            for batch in val_loader:
+                X, M, Y = [t.to(device) for t in batch]
+                outputs = model(X, M)
+                val_loss += val_criterion(outputs, Y).item()
+                val_elements += Y.numel()
+            val_loss /= val_elements
+            val_losses.append(val_loss)
+
+        if scheduler is not None:
+            scheduler.step()
+
+        if verbose:
+            pbar.set_postfix({
+                "Train Loss": f"{train_loss:.5f}",
+                "Val Loss": f"{val_loss:.5f}",
+                "Patience": patience_counter,
+                "Best Val Loss": f"{best_val_loss:.5f}",
+                "LR": f"{optimizer.param_groups[0]['lr']:.2e}",
+            })
+
+        # --- Early stopping ---
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            best_params = copy.deepcopy(model.state_dict())
+            patience_counter = 0
+        else:
+            patience_counter += 1
+        if patience_counter >= patience:
+            if verbose:
+                print(f"Early stopping at epoch {epoch + 1}")
+            break
+
+    model.load_state_dict(best_params)
+    print(f"Training completed with best validation loss: {best_val_loss:.4f}")
+    pbar.close()
+
+    return (
+        torch.tensor(train_losses).numpy(),
+        torch.tensor(val_losses).numpy(),
+    )
