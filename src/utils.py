@@ -1,4 +1,16 @@
 import numpy as np  #type: ignore
+import matplotlib.pyplot as plt  #type: ignore
+
+## This file contains utility functions for data imputation and preprocessing, including:
+# - get_train_medians: compute the median of each sensor from the training data
+# - get_train_means: compute the mean of each sensor from the training data
+# - apply_imputation: perform median or mean imputation on the input data using the provided            
+#   medians or means
+# - median_imputer_single_dataset: compute medians from the training data and apply median imputation to the entire dataset (train, val, test)
+# - mean_imputer_single_dataset: compute means from the training data and apply mean imputation to the entire dataset (train, val, test)
+# - last_value_imputer_single_dataset: perform last value imputation on the input data using the last observed value 
+# - generate_GRUD_4D_input: generate a 4D input tensor for GRUD from the original measurements, including the original values, last observed values, masks, and time since last observation
+# - generate_channels: generate interleaved data and mask channels for each sensor from the original measurements   
 
 def get_train_medians(Xtrain):
     # compute the median of each sensor using numpy
@@ -227,3 +239,52 @@ def generate_channels(measurements):
     
     #return a tensor of shape (ndata, nsensor*2) or (ndata, lags, nsensor*2) where the channels are interleaved as [data1, mask1, data2, mask2, ...]
     return channels
+
+## This file also contains a utility function for plotting training curves: 
+# - plot_training_curves: plot the training and validation MSE loss curves over epochs using matplotlib
+
+def plot_training_curves(train_errors, valid_errors):
+
+    # PLOT TRAINING CURVES
+    plt.figure(figsize=(10, 5))
+    plt.plot(train_errors, label='Train MSE')
+    plt.plot(valid_errors, label='Validation MSE')
+    plt.xlabel('Epoch')
+    plt.ylabel('MSE Loss')
+    plt.title('Training and Validation MSE Loss Curves')
+    plt.legend()
+    plt.grid()
+    plt.show()
+
+def evaluate_model(
+    evaluate,
+    mshred,
+    train_dataset,
+    val_dataset,
+    test_dataset,
+    model,
+    type,
+    masking_type=None,
+):
+    
+    # MSE and MRE
+    if masking_type is None:
+        train_mse, train_mre = evaluate(mshred, train_dataset)
+        val_mse, val_mre = evaluate(mshred, val_dataset)
+        test_mse, test_mre = evaluate(mshred, test_dataset)
+    else:
+        train_mse, train_mre = evaluate(mshred, train_dataset, masking_type=masking_type)
+        val_mse, val_mre = evaluate(mshred, val_dataset, masking_type=masking_type)
+        test_mse, test_mre = evaluate(mshred, test_dataset, masking_type=masking_type)
+        
+    test_error = {
+        "model": model,
+        "type": type,
+        "train-mse": float(train_mse),
+        "val-mse": float(val_mse),
+        "test-mse": float(test_mse),
+        "train-mre": float(train_mre),
+        "val-mre": float(val_mre),
+        "test-mre": float(test_mre),
+    }
+    return test_error
