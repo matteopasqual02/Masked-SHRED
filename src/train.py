@@ -527,6 +527,7 @@ def sparse_fit(
     patience: int = 20,
     verbose: bool = True,
     sparse_factor: int = 4,
+    sparse_log: bool = False,
 ):
     # get device
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -563,7 +564,15 @@ def sparse_fit(
 
         # --- Train ---
         model.train()
-        for batch in train_loader:
+
+        # sparse logging variables
+        if sparse_log:
+            epoch_selected_sum = 0.0
+            epoch_valid_sum = 0.0
+            epoch_traj_count = 0
+            epoch_total_sensors = None
+
+        for batch_idx, batch in enumerate(train_loader):
             X, M, Y = [t.to(device) for t in batch]
             B, T, F = M.shape
 
@@ -579,6 +588,15 @@ def sparse_fit(
             M_sparse = traj_mask.unsqueeze(1).expand(B, T, F) * M
             X = X * M_sparse
 
+            # For logging: count selected sensors, valid sensors, and trajectories
+            if sparse_log:
+                selected_per_traj = traj_mask.sum(dim=1).float()
+                valid_per_traj = valid.sum(dim=1).float()
+                epoch_selected_sum += selected_per_traj.sum().item()
+                epoch_valid_sum += valid_per_traj.sum().item()
+                epoch_traj_count += B
+                epoch_total_sensors = F
+                
             optimizer.zero_grad()
             outputs = model(X, M_sparse)
             loss = criterion(outputs, Y)
@@ -610,14 +628,23 @@ def sparse_fit(
         if scheduler is not None:
             scheduler.step()
 
+        # Sparse logging calculations
+        mean_selected = (epoch_selected_sum / epoch_traj_count) if epoch_traj_count > 0 else 0.0
+        mean_valid = (epoch_valid_sum / epoch_traj_count) if epoch_traj_count > 0 else 0.0
+        total_sensors = epoch_total_sensors if epoch_total_sensors is not None else 0
+
         if verbose:
-            pbar.set_postfix({
+            postfix = {
                 "Train Loss": f"{train_loss:.5f}",
                 "Val Loss": f"{val_loss:.5f}",
                 "Patience": patience_counter,
                 "Best Val Loss": f"{best_val_loss:.5f}",
                 "LR": f"{optimizer.param_groups[0]['lr']:.2e}",
-            })
+            }
+            # Add sparse logging info if enabled
+            if sparse_log:
+                postfix["Sparse S/V/T"] = f"{mean_selected:.1f}/{mean_valid:.1f}/{total_sensors}"
+            pbar.set_postfix(postfix)
 
         # --- Early stopping ---
         if val_loss < best_val_loss:
