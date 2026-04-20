@@ -212,3 +212,29 @@ def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, ite
     plt.show()
 
     return ds_shred, ds_error
+
+def align_ds(test_idx, ds, permuted_indices, lenmonths, geom):
+    # Build test indices in original (chronological) ds based on the month permutation used for training
+    perm_time_idx = np.concatenate([np.arange(m * lenmonths, (m + 1) * lenmonths) for m in permuted_indices])
+    test_time_idx = np.concatenate([np.arange(i * lenmonths, (i + 1) * lenmonths) for i in test_idx])
+    flat_test_idx = perm_time_idx[test_time_idx]
+
+    # Use the exact column mask used during preprocessing/training (based on Surface elevation)
+    common_valid_cols = ~np.isnan(ds["Surface elevation"].values).any(axis=0)
+
+    # mikeio requires monotonic increasing time; create a test reference dataset with aligned values
+    items = ["Surface elevation", "U velocity", "V velocity"]
+    ref_time = ds.time[:len(flat_test_idx)]
+    ds_ref_arrays = []
+    for item in items:
+        values = ds[item].values[flat_test_idx].copy()
+        values[:, ~common_valid_cols] = np.nan
+        ds_ref_arrays.append(
+            mikeio.DataArray(
+                data=values,
+                time=ref_time,
+                item=ds[item].item,
+                geometry=geom,
+            )
+        )
+    return mikeio.Dataset(ds_ref_arrays)

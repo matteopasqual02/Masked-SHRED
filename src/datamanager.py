@@ -318,6 +318,10 @@ class ROMDataManager:
             self.test_indices = np.arange(int(data.shape[0] * (self.train_size + self.val_size)), data.shape[0])
 
         if measurements is not None:
+            if isinstance(measurements, torch.Tensor):
+                measurements = measurements.detach().cpu().numpy()
+            if not isinstance(measurements, np.ndarray):
+                raise ValueError("measurements must be a numpy array or torch tensor")
             measurements = measurements.reshape(measurements.shape[0], measurements.shape[1], -1)  # ensure measurements are (ntrajectories, ntimes, num_sensors)
 
             if imputer is not None:

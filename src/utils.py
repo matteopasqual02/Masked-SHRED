@@ -12,6 +12,14 @@ import matplotlib.pyplot as plt  #type: ignore
 # - generate_GRUD_4D_input: generate a 4D input tensor for GRUD from the original measurements, including the original values, last observed values, masks, and time since last observation
 # - generate_channels: generate interleaved data and mask channels for each sensor from the original measurements   
 
+def _to_numpy_array(X):
+    # Convert tensor-like inputs to numpy arrays for numpy-based imputation routines.
+    if isinstance(X, np.ndarray):
+        return X
+    if hasattr(X, "detach") and hasattr(X, "cpu") and hasattr(X, "numpy"):
+        return X.detach().cpu().numpy()
+    return np.asarray(X)
+
 def get_train_medians(Xtrain):
     # compute the median of each sensor using numpy
     # input shape is (n_samples, n_sensors) or (n_samples, n_timestamps, n_sensors)
@@ -88,6 +96,8 @@ def apply_imputation_3D(X, medians):
 def median_imputer_single_dataset(X, train_idx):
     # compute medians from the training data and apply median imputation to the entire dataset (train, val, test)
 
+    X = _to_numpy_array(X)
+
     if X.ndim == 2:
         Xtrain = X[train_idx]                       # extract training data using train indices
         medians = get_train_medians(Xtrain)         # compute medians from the training data
@@ -104,6 +114,8 @@ def median_imputer_single_dataset(X, train_idx):
 def mean_imputer_single_dataset(X, train_idx):
     # compute means from the training data and apply mean imputation to the entire dataset (train, val, test)
 
+    X = _to_numpy_array(X)
+
     if X.ndim == 2:
         Xtrain = X[train_idx]                       # extract training data using train indices
         means = get_train_means(Xtrain)             # compute means from the training data
@@ -119,7 +131,8 @@ def mean_imputer_single_dataset(X, train_idx):
 
 def last_value_imputer_single_dataset(X, train_idx):
     # perform last value imputation on the input data X using the last observed value 
-    
+
+    X = _to_numpy_array(X)
     X_imputed = X.copy()                                    # create a copy of X to avoid modifying the original data
     if X_imputed.ndim == 2:
         for sensor_idx in range(X_imputed.shape[1]):
