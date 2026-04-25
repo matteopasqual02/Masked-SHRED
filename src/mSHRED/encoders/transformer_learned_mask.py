@@ -206,9 +206,11 @@ class TransformerEncoderLayer(nn.Module):
         # Activation function for the feedforward network
         self.activation = activation
 
-    def _self_attention_block(self, x, is_causal):
-        # Build the learned additive mask from the current representation
-        M = self.mask_mlp(x)  # Shape: (B, n_heads, S, S)
+    def _self_attention_block(self, x, src_mask=None, is_causal=False):
+        # Build the learned additive mask.
+        # If no explicit mask embedding is provided, fall back to the current representation.
+        mask_source = src_mask if src_mask is not None else x
+        M = self.mask_mlp(mask_source)  # Shape: (B, n_heads, S, S)
         # Apply multi-head self-attention with the learned mask: softmax(QKt/sqrt(d) + M) V
         attn_output = self.self_attn(x, x, x, attn_mask=M, is_causal=is_causal)  
         return self.dropout1(attn_output)  
@@ -224,12 +226,12 @@ class TransformerEncoderLayer(nn.Module):
 
         #if norm_first is True, we apply layer normalization before the attention and feedforward blocks
         if self.norm_first:
-            x = x + self._self_attention_block(self.norm1(x), is_causal=is_causal)  
+            x = x + self._self_attention_block(self.norm1(x), src_mask=src_mask, is_causal=is_causal)  # Apply attention block with residual connection
             x = x + self._feedforward_block(self.norm2(x)) 
 
         #if norm_first is False, we apply layer normalization after the attention and feedforward blocks
         else:
-            out_1 = self._self_attention_block(x, is_causal=is_causal)
+            out_1 = self._self_attention_block(x, src_mask=src_mask, is_causal=is_causal)
 
             #if the output of the attention block is 4D, we need to reshape it back to 3D before adding it to the input
             if out_1.dim() == 4:
@@ -373,7 +375,7 @@ class TransformerLearnedMask(nn.Module):
             dropout=dropout, device=device
         )
 
-    def forward(self, src, missing_mask=None, src_mask=None, is_causal=False):
+    def forward(self, src, missing_mask=None, is_causal=False):
 
         # Apply missing mask to the input before embedding
         if self.double_channels:
@@ -383,11 +385,12 @@ class TransformerLearnedMask(nn.Module):
 
         # Embed the input and add positional encoding
         src = self.input_embedding(src)  # Project input features to the model's embedding dimension
+        missing_mask = self.input_embedding(missing_mask) if missing_mask is not None else None  # Project missing mask to the same dimension if it exists
         src = self.pos_encoder(src)      # Add positional encoding to the input
 
         # Pass the input through the transformer encoder
         transformer_output = self.transformer_encoder(
-            src, mask=src_mask, is_causal=is_causal
+            src, mask=missing_mask, is_causal=is_causal
         ) 
 
         # Return only the last timestep's output for each sequence in the batch
