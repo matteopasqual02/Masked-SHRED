@@ -157,7 +157,13 @@ class DataManager:
         else:
             self.data = np.hstack((self.data, data))
 
-    def prepare(self, verbose = False, masking_type = None, unused_data = None):
+    def prepare(
+        self, 
+        verbose = False,        # whether to print verbose output about the data preparation process and resulting data shapes
+        masking_type = None,    # type of masking to apply to the sensor measurements (if None, no masking is applied; if 'mask_data', random masking is applied to the sensor measurements; if 'mask_data_random', random masking with random values is applied to the sensor measurements; if 'grud', the input is prepared for use with a GRUD model by creating separate channels for observed values and mask indicators; if 'double_channels', the input is prepared by doubling the number of channels, where for each original sensor channel, one channel contains the observed values (with masked values set to 0) and the other channel contains a binary mask indicating which values are observed vs masked)
+        unused_data = None,     # dataset id or list of dataset ids to exclude from the output targets (if None, all datasets are included in the output targets)
+        pad_output = False      # whether to pad the output state vectors with zeros for any datasets that are excluded via unused_data (if False, the output state vectors will only include the active datasets; if True, the output state vectors will have the same number of dimensions as the total number of datasets, but with zeros in the positions corresponding to excluded datasets
+    ):
 
         if self.data is None:
             raise ValueError("No data found. Please add at least one dataset before calling prepare().")
@@ -196,20 +202,17 @@ class DataManager:
         self.sensor_scaler = sc
         scaled_sensor_measurements = sc.transform(self.sensor_measurements)
 
-        if masking_type is not None:
-            if masking_type == 'grud':
-                scaled_sensor_measurements = generate_GRUD_4D_input(scaled_sensor_measurements)
-                lagged_sensor_measurements = generate_GRUD_4D_lags(scaled_sensor_measurements, self.lags)
-            elif masking_type == 'double_channels':
-                scaled_sensor_measurements = generate_channels(scaled_sensor_measurements)
-                lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
-            else:
-                lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
-
+        if masking_type is not None and masking_type == 'grud':
+            scaled_sensor_measurements = generate_GRUD_4D_input(scaled_sensor_measurements)
+            lagged_sensor_measurements = generate_GRUD_4D_lags(scaled_sensor_measurements, self.lags)
         else:
             lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+        if pad_output:
+            scaled_data = generate_lagged_sensor_measurements(scaled_data, self.lags)
+        
 
         # build datasets
         Xtrain = torch.tensor(lagged_sensor_measurements[self.train_indices], dtype=torch.float32, device=device)
@@ -337,7 +340,7 @@ class ROMDataManager:
                     raise ValueError("Unsupported imputation strategy. Supported strategies are 'median', 'mean', and 'last_value'.")      
 
             # debugging on 3D data after imputation
-            print("Nuber of nan values in measurements after imputation:", np.isnan(measurements).sum())   
+            #print("Nuber of nan values in measurements after imputation:", np.isnan(measurements).sum())   
 
         # dimensionality reduction
         if modes > 0:
@@ -390,7 +393,13 @@ class ROMDataManager:
             self.data = np.concatenate((self.data, data), axis=-1)
 
 
-    def prepare(self, verbose = False, masking_type = None, unused_data = None):
+    def prepare(
+        self, 
+        verbose = False,        # whether to print verbose output about the data preparation process and resulting data shapes
+        masking_type = None,    # type of masking to apply to the sensor measurements (if None, no masking is applied; if 'mask_data', random masking is applied to the sensor measurements; if 'mask_data_random', random masking with random values is applied to the sensor measurements; if 'grud', the input is prepared for use with a GRUD model by creating separate channels for observed values and mask indicators; if 'double_channels', the input is prepared by doubling the number of channels, where for each original sensor channel, one channel contains the observed values (with masked values set to 0) and the other channel contains a binary mask indicating which values are observed vs masked)
+        unused_data = None,     # dataset id or list of dataset ids to exclude from the output targets (if None, all datasets are included in the output targets)
+        pad_output = False,     # whether to pad the output state vectors with zeros for any datasets that are excluded via unused_data (if False, the output state vectors will only include the active datasets; if True, the output state vectors will have the same number of dimensions as the total number of datasets, but with zeros in the positions corresponding to excluded datasets
+        ):
         # This method will prepare the data for training by applying scaling, generating lagged features, and creating PyTorch datasets for train/val/test splits. It will also handle masking of sensor measurements if specified.
 
         if self.data is None:
@@ -425,17 +434,16 @@ class ROMDataManager:
         self.sensor_scaler = sc
         scaled_sensor_measurements = sc.transform(self.sensor_measurements.reshape(-1, self.sensor_measurements.shape[-1])).reshape(self.sensor_measurements.shape)
 
-        if masking_type is not None:
-            if masking_type == 'grud':
-                scaled_sensor_measurements = generate_GRUD_4D_input_3D(scaled_sensor_measurements)
-                lagged_sensor_measurements = generate_GRUD_4D_lags(scaled_sensor_measurements, self.lags)
-            elif masking_type == 'double_channels':
-                scaled_sensor_measurements = generate_channels(scaled_sensor_measurements)
-                lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
-            else:
-                lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags) 
+        if masking_type is not None and masking_type == 'grud':
+            scaled_sensor_measurements = generate_GRUD_4D_input_3D(scaled_sensor_measurements)
+            lagged_sensor_measurements = generate_GRUD_4D_lags(scaled_sensor_measurements, self.lags)
         else:
             lagged_sensor_measurements = generate_lagged_sensor_measurements(scaled_sensor_measurements, self.lags)
+
+        if pad_output:
+            scaled_data_flat = generate_lagged_sensor_measurements(scaled_data, self.lags)
+        else:
+            scaled_data_flat = scaled_data.reshape(-1, scaled_data.shape[-1])
 
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -443,8 +451,6 @@ class ROMDataManager:
         train_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.train_indices])
         val_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.val_indices])
         test_rows = np.concatenate([np.arange(i * ntimes, (i + 1) * ntimes) for i in self.test_indices])
-
-        scaled_data_flat = scaled_data.reshape(-1, scaled_data.shape[-1])
 
         Xtrain = torch.tensor(lagged_sensor_measurements[train_rows], dtype=torch.float32, device=device)
         Ytrain = torch.tensor(scaled_data_flat[train_rows], dtype=torch.float32, device=device)
@@ -675,8 +681,6 @@ def get_sensor_measurements(
             else:
                 raise ValueError("Unsupported imputation strategy. Supported strategies are 'median', 'mean', and 'last_value'.")      
 
-        print("Nuber of nan values in measurements after imputation:", np.isnan(measurements).sum(), "\n")      
-        
         measurements = measurements.T  # transpose to get shape (num_sensors, time)
 
         for row in measurements:
