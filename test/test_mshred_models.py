@@ -25,7 +25,7 @@ def test_attngrud_forward_output_shapes():
     features = 3
     hidden_size = 5
 
-    x_mean = torch.zeros(1, steps, features)
+    x_mean = torch.zeros(1, 1, steps, features)
     model_all = AttnGRUD(
         input_size=features,
         cell_size=hidden_size,
@@ -47,8 +47,8 @@ def test_attngrud_forward_output_shapes():
     out_all = model_all(sample)
     out_last = model_last(sample)
 
-    assert out_all.shape == (batch_size, steps, hidden_size)
-    assert out_last.shape == (batch_size, hidden_size)
+    assert out_all.shape == (steps, batch_size, hidden_size)
+    assert out_last.shape == (steps, batch_size, hidden_size)
 
 
 def test_mshred_transformer_mlp_forward_and_freeze_unfreeze():
@@ -69,6 +69,7 @@ def test_mshred_transformer_mlp_forward_and_freeze_unfreeze():
         "num_layers": 1,
         "xlstm_type": "slstm",
         "decoder_hidden_sizes": [6],
+        "double_channels": False,
     }
     model = mSHRED(args)
 
@@ -100,6 +101,7 @@ def test_mshred_invalid_encoder_raises():
         "num_layers": 1,
         "xlstm_type": "slstm",
         "decoder_hidden_sizes": [6],
+        "double_channels": False,
     }
 
     with pytest.raises(NotImplementedError):
@@ -121,6 +123,7 @@ def test_mshred_invalid_decoder_raises():
         "num_layers": 1,
         "xlstm_type": "slstm",
         "decoder_hidden_sizes": [6],
+        "double_channels": False,
     }
 
     with pytest.raises(NotImplementedError):

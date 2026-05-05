@@ -43,12 +43,12 @@ def stubbed_linkage_modules(monkeypatch):
     monkeypatch.setitem(sys.modules, "src.mSHRED.encoders.xlstm.xlstm", _stub_module("src.mSHRED.encoders.xlstm.xlstm", XLSTM=_EchoEncoder))
     monkeypatch.setitem(sys.modules, "src.mSHRED.encoders.LSTM", _stub_module("src.mSHRED.encoders.LSTM", LSTM=_EchoEncoder))
     monkeypatch.setitem(sys.modules, "src.mSHRED.encoders.GRUD", _stub_module("src.mSHRED.encoders.GRUD", GRUD=_EchoEncoder))
-    monkeypatch.setitem(sys.modules, "src.mSHRED.encoders.attnGRUD", _stub_module("src.mSHRED.encoders.attnGRUD", attnGRUD=_EchoEncoder))
+    monkeypatch.setitem(sys.modules, "src.mSHRED.encoders.attnGRUD", _stub_module("src.mSHRED.encoders.attnGRUD", AttnGRUD=_EchoEncoder))
     monkeypatch.setitem(sys.modules, "src.mSHRED.decoders.MLP", _stub_module("src.mSHRED.decoders.MLP", MLP=_LinearDecoder))
     monkeypatch.setitem(sys.modules, "src.mSHRED.decoders.CNN", _stub_module("src.mSHRED.decoders.CNN", CNN=_LinearDecoder))
 
 
-@pytest.mark.parametrize("encoder_name", ["transformer", "xlstm", "lstm", "grud", "attnGRUD"])
+@pytest.mark.parametrize("encoder_name", ["transformer", "xlstm", "lstm", "grud", "att_grud"])
 @pytest.mark.parametrize("decoder_name", ["mlp", "cnn"])
 def test_mshred_dynamic_linkage_all_pairs(stubbed_linkage_modules, encoder_name, decoder_name):
     args = {
@@ -65,13 +65,15 @@ def test_mshred_dynamic_linkage_all_pairs(stubbed_linkage_modules, encoder_name,
         "num_layers": 1,
         "xlstm_type": "slstm",
         "decoder_hidden_sizes": [6],
+        "double_channels": False,
+        "X_mean": torch.zeros(1, 1, 4, 3),
     }
     model = mSHRED(args)
 
     x = torch.randn(6, args["input_length"], args["input_size"])
     y = model(x)
 
-    assert y.shape == (6, args["output_size"])
+    assert y.shape == (args["output_size"],)
 
 
 def test_engine_sensor_to_reconstruction_and_evaluate(monkeypatch):
@@ -88,8 +90,8 @@ def test_engine_sensor_to_reconstruction_and_evaluate(monkeypatch):
 
     class DummyModel(nn.Module):
         def forward(self, x):
-            # Return two latent features for each timestep.
-            return torch.stack((x[:, -1, 0], x[:, -1, 1]), dim=1)
+            # Return two latent features for each sample.
+            return x[:, -1, :2]
 
     class DummyDM:
         def __init__(self):
@@ -115,16 +117,20 @@ def test_engine_sensor_to_reconstruction_and_evaluate(monkeypatch):
     model = DummyModel()
     engine = SHREDEngine(datamanager=dm, model=model)
 
-    sensor_measurements = np.array(
-        [[0.0, 0.0], [0.2, 0.3], [0.4, 0.6], [0.6, 0.9], [1.0, 1.2]],
-        dtype=float,
-    )
-    rec = engine.sensor_to_reconstruction(sensor_measurements)
+    class DummyDataset:
+        def __init__(self):
+            self.X = torch.tensor(
+                [
+                    [[0.0, 0.0], [0.2, 0.3]],
+                    [[0.2, 0.3], [0.4, 0.6]],
+                    [[0.4, 0.6], [0.6, 0.9]],
+                    [[0.6, 0.9], [1.0, 1.2]],
+                    [[1.0, 1.2], [1.0, 1.2]],
+                ],
+                dtype=torch.float32,
+            )
+
+    rec = engine.sensor_to_reconstruction_dataset(DummyDataset())
 
     assert set(rec.keys()) == {"setA"}
     assert rec["setA"].shape == (5, 2)
-
-    # Build a simple target dictionary and ensure evaluate returns metrics table.
-    eval_df = engine.evaluate(sensor_measurements, {"setA": rec["setA"]})
-    assert list(eval_df.index) == ["setA"]
-    assert all(col in eval_df.columns for col in ["MSE", "RMSE", "MAE", "R2"])

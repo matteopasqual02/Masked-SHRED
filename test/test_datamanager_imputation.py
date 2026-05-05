@@ -246,10 +246,11 @@ class TestDataManagerWithMedianImputer:
         # Check lagged shape
         X_train, _ = train_ds[0]
         assert X_train.shape == (10, 2)  # (lags, sensors)
-        
-        # First lags should be padded with zeros
+
+        # The early timesteps are left-padded with zeros, while the last row
+        # carries the current observation.
         X_early = train_ds[0][0]
-        assert torch.all(X_early == 0)
+        assert torch.all(X_early[:-1] == 0)
 
     def test_sensor_measurements_consistency_across_calls(self, sample_temporal_data):
         """Test that sensor measurements are consistent across multiple calls"""

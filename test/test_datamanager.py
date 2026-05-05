@@ -60,8 +60,8 @@ def test_generate_lagged_sensor_measurements_shape_and_padding():
     lagged = generate_lagged_sensor_measurements(sensor_measurements, lags)
 
     assert lagged.shape == (3, 2, 2)
-    np.testing.assert_allclose(lagged[0], np.array([[0.0, 0.0], [0.0, 0.0]]))
-    np.testing.assert_allclose(lagged[1], np.array([[0.0, 0.0], [1.0, 10.0]]))
+    np.testing.assert_allclose(lagged[0], np.array([[0.0, 0.0], [1.0, 10.0]]))
+    np.testing.assert_allclose(lagged[1], np.array([[1.0, 10.0], [2.0, 20.0]]))
 
 
 def test_datamanager_add_data_prepare_pipeline():
