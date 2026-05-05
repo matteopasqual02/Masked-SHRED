@@ -234,12 +234,9 @@ class AttnGRUD(nn.Module):
             else:
                 outputs = torch.cat((outputs, Hidden_State.unsqueeze(1)), dim=1)
 
-        #if i want to output only the last hidden state, I return outputs[:,-1,:]
-        #otherwise I return all the hidden states
+        out = outputs.permute(1,0,2)  # (seq_len, batch_size, hidden_size)
 
-        if self.output_last:
-            outputs = outputs[:,-1,:]
-            assert outputs.dim() == 2, "Expected output shape (batch_size, hidden_size), got {}".format(outputs.shape)
-            return outputs
-        else:
-            return outputs
+        # print("LSTM output shape:", out.shape)  # Debug print
+        assert out.dim() == 3, f"LSTM output should be 3D (seq_len, batch_size, hidden_size), but got {out.dim()}D"
+
+        return out

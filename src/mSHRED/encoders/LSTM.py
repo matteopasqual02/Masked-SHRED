@@ -27,9 +27,19 @@ class LSTM(nn.Module):
         h0 = x.new_zeros((self.hidden_layers, x.size(0), self.hidden_size))
         c0 = x.new_zeros((self.hidden_layers, x.size(0), self.hidden_size))
 
-        # Encoder forward pass: return last layer hidden state as latent embedding.
-        _, (hn, _) = self.encoder(x, (h0, c0))
-        out = hn[-1].view(-1, self.hidden_size)
 
-        assert out.dim() == 2, "Expected output shape (batch_size, hidden_size), got {}".format(out.shape)
+        # Encoder forward pass: return all hidden states 
+        # out shape: (batch_size, seq_len, hidden_size)
+        # hn shape: (num_layers, batch_size, hidden_size)
+
+        out, (hn, cn) = self.encoder(x, (h0, c0))
+        out = out.permute(1,0,2)  # (seq_len, batch_size, hidden_size)
+
+        # print("LSTM output shape:", out.shape)  # Debug print
+        # print("LSTM hn shape:", hn.shape)       # Debug print
+
+        #check that the last out is the same as the last hn
+        assert torch.allclose(out[-1], hn[-1]), f"Last output does not match last hidden state: {out[-1]} vs {hn[-1]}"
+        assert out.dim() == 3, f"LSTM output should be 3D (seq_len, batch_size, hidden_size), but got {out.dim()}D"
+
         return out

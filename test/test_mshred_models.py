@@ -3,7 +3,7 @@ import pytest           #type: ignore
 import torch            #type: ignore
 
 from src.mSHRED.encoders.attnGRUD import AttnGRUD, FilterLinear
-from src.mSHRED.mSRED import mSHRED
+from src.mSHRED.mSHRED import mSHRED
 
 
 def test_filterlinear_applies_mask_to_weights():

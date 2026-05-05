@@ -7,7 +7,7 @@ import torch  # type: ignore
 import torch.nn as nn  # type: ignore
 from sklearn.preprocessing import MinMaxScaler  # type: ignore
 
-from src.mSHRED.mSRED import mSHRED
+from src.mSHRED.mSHRED import mSHRED
 
 
 class _EchoEncoder(nn.Module):

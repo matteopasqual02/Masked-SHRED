@@ -6,7 +6,7 @@ import torch                        #type: ignore
 from src.datamanager import DataManager
 from src.engine import SHREDEngine
 from src.train import fit2, evaluate2
-from src.mSHRED.mSRED import mSHRED
+from src.mSHRED.mSHRED import mSHRED
 
 
 # Utils functions

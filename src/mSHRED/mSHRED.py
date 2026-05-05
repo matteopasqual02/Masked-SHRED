@@ -12,6 +12,7 @@ class mSHRED(nn.Module):
 
         self.encoder = None
         self.decoder = None
+        self.decoder_3D = args.decoder_3D if hasattr(args, "decoder_3D") else False
 
         # Encoder choice
         if args.encoder == "transformer":
@@ -141,12 +142,18 @@ class mSHRED(nn.Module):
         if self.decoder is None:
             raise NotImplementedError("Decoder not implemented")
         
+        # If the encoder supports masking, pass the mask; otherwise, ignore it
         if mask is not None:
             encoded = self.encoder(x, mask)
         else:
             encoded = self.encoder(x)
 
-        return self.decoder(encoded)
+        # If the decoder is 3D, decode each time step; otherwise, decode only the last time step
+        if self.decoder_3D:
+            outputs = [self.decoder(encoded[i]) for i in range(encoded.size(0))]  # Decode each time step
+            return outputs
+        else:
+            return self.decoder(encoded[-1])  # Use the last time step's output for decoding
         
     def freeze(self):
 

@@ -373,11 +373,16 @@ class TransformerAttnMask(nn.Module):
             src, mask=src_mask, is_causal=is_causal
         ) 
 
-        # Return only the last timestep's output for each sequence in the batch
-        # SHAPE: (batch_size, seq_len, hidden_size) -> (batch_size, hidden_size)
-        transformer_output = transformer_output[:, -1, :]  # Extract the output corresponding to the last timestep for each sequence
+        # Return all the hidden states for each time step (seq_len, batch_size, hidden_size) 
+        transformer_output_last = transformer_output[:, -1, :]  # Extract the output corresponding to the last timestep for each sequence
+        transformer_output = transformer_output.permute(1, 0, 2)  # Permute to shape (seq_len, batch_size, hidden_size) for compatibility with decoders that expect this format
 
-        assert transformer_output.dim() == 2, "Expected output shape (batch_size, hidden_size), got {}".format(transformer_output.shape)
-
+        #check that the last out is the same as the last hn
+        assert torch.allclose(transformer_output_last, transformer_output[-1]), f"Last output does not match last hidden state: {transformer_output_last} vs {transformer_output[-1]}"
+        assert transformer_output.dim() == 3, f"Transformer output should be 3D (seq_len, batch_size, hidden_size), but got shape {transformer_output.shape}"
+        
+        #print(f"Transformer output shape: {transformer_output.shape}")
+        #print(f"Transformer output last timestep shape: {transformer_output_last.shape}")
+        
         # Return the output of the transformer encoder
         return transformer_output

@@ -1,14 +1,9 @@
-from typing import Union, List, Tuple, Optional     #type: ignore
 import numpy as np                                  #type: ignore
 import torch                                        #type: ignore
-import pandas as pd                                 #type: ignore
 from torch.utils.data import Dataset                #type: ignore
 
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score   #type: ignore
-
-from src.datamanager import DataManager, generate_lagged_sensor_measurements, generate_GRUD_4D_lags
-from src.mSHRED.mSRED import mSHRED
-from src.utils import generate_GRUD_4D_input, generate_channels
+from src.datamanager import DataManager
+from src.mSHRED.mSHRED import mSHRED
 
 class SHREDEngine:
 
@@ -78,6 +73,27 @@ class SHREDEngine:
         # Return a dictionary mapping dataset IDs to their corresponding reconstructed physical states
         return results
 
+    def sensor_to_reconstruction_dataset_lagged(self, test_dataset:Dataset):
+        # Reconstruction helper for lagged training/evaluation.
+        # The model returns a sequence of outputs, but for reconstruction we use
+        # the final time step, matching lagged_evaluate.
+        device = self._model_device()
+        X = test_dataset.X.to(device)
+        M = test_dataset.M.to(device) if hasattr(test_dataset, "M") else None
+
+        with torch.no_grad():
+            output = self.model(X, M) if M is not None else self.model(X)
+
+        if isinstance(output, (list, tuple)):
+            output = output[-1]
+        elif torch.is_tensor(output) and output.ndim == 3:
+            output = output[-1]
+
+        output = self.dm.data_scaler.inverse_transform(output.detach().cpu().numpy())
+        results = self._decode_output(output)
+        return results
+
+"""
     def engine_evaluate(self,test_dataset : Dataset, Y):
         
         # 1) Get the model's reconstruction in raw space
@@ -100,7 +116,7 @@ class SHREDEngine:
                 "MAE": mae, "R2": r2
             })
         return pd.DataFrame.from_records(records).set_index("dataset")
-
+"""
 
 """
     def sensor_to_reconstruction(self, sensor_measurements):
