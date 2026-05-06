@@ -122,8 +122,8 @@ class DataManager:
                 plt.semilogy(S[:modes], color = 'magenta', linewidth = 2)
                 plt.title("Singular Values Decay \n")
                 plt.show()
-            
-            print(f"Residual energy of {id} after keeping {modes} modes: {residual_energy*100:.4f} %")
+                
+                print(f"Residual energy of {id} after keeping {modes} modes: {residual_energy*100:.4f} %")
 
         # commit to self
         self._dataset_ids.append(id)
@@ -167,11 +167,12 @@ class DataManager:
 
         if self.data is None:
             raise ValueError("No data found. Please add at least one dataset before calling prepare().")
-
-        print(f"\nDatasets: {self._dataset_ids}")
+        if verbose:
+            print(f"\nDatasets: {self._dataset_ids}")
         if unused_data is not None:
             excluded_ids = {unused_data} if isinstance(unused_data, str) else set(unused_data)
-            print(f"Dataset NOT used: {sorted(excluded_ids)}")
+            if verbose:
+                print(f"Dataset NOT used: {sorted(excluded_ids)}")
             self._active_dataset_ids = [ids for ids in self._dataset_ids if ids not in excluded_ids]
         else:
             self._active_dataset_ids = list(self._dataset_ids)
@@ -224,13 +225,14 @@ class DataManager:
         Xtest = torch.tensor(lagged_sensor_measurements[self.test_indices], dtype=torch.float32, device=device)
         Ytest = torch.tensor(scaled_data[self.test_indices], dtype=torch.float32, device=device)
 
-        print("\nNumber of nan values in sensor measurements after masking:", np.isnan(scaled_sensor_measurements).sum())
-
         if verbose:
-            print(f"\nData shapes after preparation:")
-            print(f"Train:\t {Xtrain.shape} -> {Ytrain.shape}")
-            print(f"Val:\t {Xval.shape} -> {Yval.shape}")
-            print(f"Test:\t {Xtest.shape} -> {Ytest.shape}")   
+            print("\nNumber of nan values in sensor measurements after masking:", np.isnan(scaled_sensor_measurements).sum())
+
+    
+        print(f"\nData shapes after preparation:")
+        print(f"Train:\t {Xtrain.shape} -> {Ytrain.shape}")
+        print(f"Val:\t {Xval.shape} -> {Yval.shape}")
+        print(f"Test:\t {Xtest.shape} -> {Ytest.shape}")   
 
         # return datasets
         if masking_type is not None and masking_type == 'mask_data':
@@ -372,7 +374,7 @@ class ROMDataManager:
                 plt.title("Singular Values Decay \n")
                 plt.show()
 
-            print(f"Residual energy of {id} after keeping {modes} modes: {residual_energy*100:.4f} %")
+                print(f"Residual energy of {id} after keeping {modes} modes: {residual_energy*100:.4f} %")
 
 
         # commit to self
@@ -404,11 +406,12 @@ class ROMDataManager:
 
         if self.data is None:
             raise ValueError("No data found. Please add at least one dataset before calling prepare().")
-
-        print(f"\nDatasets: {self._dataset_ids}")
+        if verbose:
+            print(f"\nDatasets: {self._dataset_ids}")
         if unused_data is not None:
             excluded_ids = {unused_data} if isinstance(unused_data, str) else set(unused_data)
-            print(f"Dataset NOT used: {sorted(excluded_ids)}")
+            if verbose:
+                print(f"Dataset NOT used: {sorted(excluded_ids)}")
             self._active_dataset_ids = [ids for ids in self._dataset_ids if ids not in excluded_ids]
         else:
             self._active_dataset_ids = list(self._dataset_ids)
@@ -458,14 +461,15 @@ class ROMDataManager:
         Yval = torch.tensor(scaled_data_flat[val_rows], dtype=torch.float32, device=device)
         Xtest = torch.tensor(lagged_sensor_measurements[test_rows], dtype=torch.float32, device=device)
         Ytest = torch.tensor(scaled_data_flat[test_rows], dtype=torch.float32, device=device)
-
-        print("\nNumber of nan values in sensor measurements after masking:", np.isnan(scaled_sensor_measurements).sum())
-
+        
         if verbose:
-            print(f"\nData shapes after preparation:")
-            print(f"Train:\t {Xtrain.shape} -> {Ytrain.shape}")
-            print(f"Val:\t {Xval.shape} -> {Yval.shape}")
-            print(f"Test:\t {Xtest.shape} -> {Ytest.shape}")
+            print("\nNumber of nan values in sensor measurements after masking:", np.isnan(scaled_sensor_measurements).sum())
+
+        
+        print(f"\nData shapes after preparation:")
+        print(f"Train:\t {Xtrain.shape} -> {Ytrain.shape}")
+        print(f"Val:\t {Xval.shape} -> {Yval.shape}")
+        print(f"Test:\t {Xtest.shape} -> {Ytest.shape}")
 
         # return datasets
         if masking_type is not None and masking_type == 'mask_data':
