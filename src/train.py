@@ -72,7 +72,8 @@ def fit(
         best_params = copy.deepcopy(model.state_dict())  # deep copy to avoid reference issues
 
     # start training loop
-    print("Starting training...")
+    if verbose:
+        print("Starting training...")
     pbar = tqdm(range(num_epochs), desc="Training", disable=not verbose)
     is_mask_data = masking_type == 'mask_data'
     for epoch in pbar:
@@ -200,9 +201,11 @@ def fit(
     #End of training loop
     if has_val:
         model.load_state_dict(best_params)  # Load the best model parameters before returning
-        print(f"Training completed with best validation loss: {best_val_loss:.4f}")
+        if verbose:
+            print(f"Training completed with best validation loss: {best_val_loss:.4f}")
     else:
-        print("Training completed without validation set (early stopping disabled).")
+        if verbose:
+            print("Training completed without validation set (early stopping disabled).")
     pbar.close()
 
     # Convert the lists of training and validation losses to numpy arrays before returning
