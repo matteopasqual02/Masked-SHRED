@@ -213,6 +213,53 @@ def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, ite
 
     return ds_shred, ds_error
 
+def error_mshred(test_reconstruction, ds, items=None):
+
+    if items is None:
+        items = ["Surface elevation", "U velocity", "V velocity"]
+    elif isinstance(items, str):
+        items = [items]
+
+    ntimes = test_reconstruction[items[0]].shape[0]
+    n_items = len(items)
+
+    mse_matrix = np.zeros((ntimes, n_items))
+    mre_matrix = np.zeros((ntimes, n_items))
+
+    times_test = ds.time[-ntimes:]
+
+    for j, item in enumerate(items):
+
+        target = ds[item].sel(time=times_test).values
+
+        # rebuild full field with NaNs
+        full = np.full(
+            (ntimes, ds[item].values.shape[1]),
+            np.nan
+        )
+
+        valid_cols = ~np.isnan(ds[item].values).any(axis=0)
+        full[:, valid_cols] = test_reconstruction[item]
+
+        pred = full
+
+        eps = 1e-12
+
+        for t in range(ntimes):
+
+            error = target[t] - pred[t]
+
+            # MSE at timestep t
+            mse_matrix[t, j] = np.nanmean(error**2)
+
+            # MRE at timestep t
+            numerator = np.sqrt(np.nansum(error**2))
+            denominator = np.sqrt(np.nansum(target[t]**2))
+
+            mre_matrix[t, j] = numerator / max(denominator, eps)
+
+    return mse_matrix, mre_matrix
+
 def align_ds(test_idx, ds, permuted_indices, lenmonths, geom):
     # Build test indices in original (chronological) ds based on the month permutation used for training
     perm_time_idx = np.concatenate([np.arange(m * lenmonths, (m + 1) * lenmonths) for m in permuted_indices])
