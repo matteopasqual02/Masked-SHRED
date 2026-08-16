@@ -71,7 +71,7 @@ def get_altimetry_obs(quality=None):
         altlist.append(o)
     return altlist
 
-def extract_water_level_measurements(stations, ds_time, obs_fldr, window="25min"):
+def extract_water_level_measurements(stations, ds_time, obs_fldr, window="25min", verbose=False):
     # Extract water level measurements for given stations and simulation timestamps.
     # For each station, attempts to read filtered water level data aligned with simulation timestamps.
     # If unavailable, falls back to raw water level data and takes the last measurement within 
@@ -128,7 +128,8 @@ def extract_water_level_measurements(stations, ds_time, obs_fldr, window="25min"
         else:
             missing_files.append(station.name)
 
-        print(f"Extracted measurements for station {station.name} from {csv_path}")
+        if verbose:
+            print(f"Extracted measurements for station {station.name} from {csv_path}")
 
     # Report any stations for which measurement files were missing or incompatible
     if missing_files:
