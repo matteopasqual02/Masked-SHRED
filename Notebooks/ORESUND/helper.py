@@ -221,7 +221,7 @@ def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, ite
         prediction.plot(ax=axs[row, 1], title="SHRED", cmap=cmap, vmin=vmin, vmax=vmax)
         error.plot(
             ax=axs[row, 2],
-            title=f"Error\nMSE={metrics[item]['mse']:.6f}\nMRE={metrics[item]['mre']:.6f}",
+            title=f"Error",
             cmap="gray",
         )
 
