@@ -98,7 +98,7 @@ def plot_reconstruction(test_reconstruction, X_raw, sst_locs, index=-1):
     fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
 
     panels = [
-        (X_orig_m, 'Ground Truth', cmap_temp, vmin, vmax, '°C'),
+        (X_orig_m, f'Ground Truth {1424 + index}', cmap_temp, vmin, vmax, '°C'),
         (X_hat_m,  'M-SHRED',      cmap_temp, vmin, vmax, '°C'),
         (X_err_m,  'Absolute Error', 'inferno', None, None, '°C'),
     ]
