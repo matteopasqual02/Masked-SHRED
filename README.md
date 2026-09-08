@@ -2,22 +2,21 @@
 
 **Real-time state reconstruction from sparse, asynchronous, and incomplete sensor measurements.**
  
-Real-world sensing systems are inherently imperfect: sensors fail, disconnect intermittently, sample at asynchronous rates, and are subject to noise — producing measurement streams that are irreg[...]
+Real-world sensing systems are inherently imperfect: sensors fail, disconnect intermittently, sample at asynchronous rates, and are subject to noise — producing measurement streams that are irregular, incomplete, and heterogeneous. Yet most sensing strategies for real-time state reconstruction assume full observability, a constraint that severely limits their applicability in operational settings.
  
-**Masked-SHRED** addresses this gap by introducing and systematically evaluating a hierarchy of transformer-based masking mechanisms — channel-wise, hidden-state, and multi-head self-attention ma[...]
+**Masked-SHRED** addresses this gap by introducing and systematically evaluating a hierarchy of transformer-based masking mechanisms — channel-wise, hidden-state, and multi-head self-attention masking — within the [Shallow Recurrent Decoder (SHRED)](https://arxiv.org/abs/2301.12011) framework. By incorporating the binary missingness mask at multiple levels of the architecture, the model becomes explicitly aware of sensor availability, enabling high-dimensional state estimation from sparse, asynchronous, and missing sensor measurements.
  
-We further introduce a **multi-step decoding training objective**: by decoding at intermediate timesteps and applying a weighted reconstruction loss, the model receives auxiliary supervision throug[...]
+We further introduce a **multi-step decoding training objective**: by decoding at intermediate timesteps and applying a weighted reconstruction loss, the model receives auxiliary supervision throughout the temporal axis, encouraging smoother and more coherent latent trajectories.
  
 Across synthetic benchmarks and a real-world hydrodynamic dataset, we show that:
  
-1. **Transformer-based masking outperforms alternatives.** It beats standard imputation techniques, recurrent architectures designed for incomplete time-series, and the conventional SHRED framewor[...]
+1. **Transformer-based masking outperforms alternatives.** It beats standard imputation techniques, recurrent architectures designed for incomplete time-series, and the conventional SHRED framework restricted to continuously available sensors — especially under heterogeneous missing-data patterns and over extended prediction horizons.
 2. **Multi-step decoding improves robustness.** Auxiliary supervision during training enhances reconstruction fidelity and robustness to heterogeneous missing-data patterns.
-3. **No added inference cost.** Both contributions preserve the computational efficiency of the original SHRED framework — masking is integrated directly into the encoder, and auxiliary decoding[...]
+3. **No added inference cost.** Both contributions preserve the computational efficiency of the original SHRED framework — masking is integrated directly into the encoder, and auxiliary decoding branches are discarded after training.
 
 ## Table of Contents
  
 - [Installation](#installation)
-- [Downloading Datasets](#downloading-datasets)
 - [Quickstart](#quickstart)
 - [Repository Structure](#repository-structure)
 - [Results](#results)
@@ -32,61 +31,7 @@ git clone https://github.com/matteopasqual02/Masked-SHRED.git
 cd masked-shred
 ```
 
-## Downloading Datasets
 
-This project includes experiments on multiple datasets. Follow the instructions below to download them:
-
-### DGF (Damped Gear Friction)
-A synthetic benchmark dataset. Download from:
-- [DGF Dataset](link-to-dgf-dataset)
-
-Instructions:
-```bash
-cd data/DGF
-# Download and extract the dataset
-wget <dataset-url>
-tar -xzf dgf_data.tar.gz
-```
-
-### HYDRO (Hydrodynamic)
-A real-world hydrodynamic dataset. Download from:
-- [HYDRO Dataset](link-to-hydro-dataset)
-
-Instructions:
-```bash
-cd data/HYDRO
-# Download and extract the dataset
-wget <dataset-url>
-tar -xzf hydro_data.tar.gz
-```
-
-### ORESUND
-A coastal hydrodynamic dataset from the Oresund Strait. Download from:
-- [ORESUND Dataset](link-to-oresund-dataset)
-
-Instructions:
-```bash
-cd data/ORESUND
-# Download and extract the dataset
-wget <dataset-url>
-tar -xzf oresund_data.tar.gz
-```
-
-### SST (Sea Surface Temperature)
-Sea surface temperature dataset. Download from:
-- [SST Dataset](link-to-sst-dataset)
-
-Instructions:
-```bash
-cd data/SST
-# Download and extract the dataset
-wget <dataset-url>
-tar -xzf sst_data.tar.gz
-```
-
-**Note:** Once downloaded, ensure the datasets are organized in the `data/` directory as referenced in the notebooks.
-
- 
 ## Quickstart
  
 ```python
@@ -212,3 +157,4 @@ TODO
 ## License
  
 This project is released under the [MIT License](LICENSE) — update this section if a different license applies.
+ 
