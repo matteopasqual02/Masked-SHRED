@@ -204,9 +204,10 @@ def test_train_and_evaluate_variants_cover_masked_and_unmasked_paths(train_modul
     assert train_losses_no_val.size > 0
     assert val_losses_no_val.size == 0
 
-    mse, mre = train_module.evaluate(no_val_model, val_dataset, batch_size=4)
+    mse, mre, nrmse = train_module.evaluate(no_val_model, val_dataset, batch_size=4)
     assert isinstance(mse, float)
     assert isinstance(mre, float)
+    assert isinstance(nrmse, float)
 
     masked_x = torch.randn(12, 3, 2)
     masked_x[0, 0, 0] = torch.nan

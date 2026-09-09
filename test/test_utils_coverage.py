@@ -295,7 +295,7 @@ class TestPlottingAndEvaluation:
         from unittest.mock import MagicMock
         
         # Create mock evaluate function
-        evaluate_fn = MagicMock(return_value=(0.5, 0.3))
+        evaluate_fn = MagicMock(return_value=(0.5, 0.3, 0.2))
         
         train_dataset = MagicMock()
         val_dataset = MagicMock()
@@ -316,13 +316,14 @@ class TestPlottingAndEvaluation:
         assert "train-mse" in result
         assert "val-mse" in result
         assert "test-mse" in result
+        assert "train-nrmse" in result
     
     def test_evaluate_model_with_masking(self):
         """Test model evaluation function with masking_type."""
         from unittest.mock import MagicMock
         
         # Create mock evaluate function that accepts masking_type
-        evaluate_fn = MagicMock(return_value=(0.5, 0.3))
+        evaluate_fn = MagicMock(return_value=(0.5, 0.3, 0.2))
         
         train_dataset = MagicMock()
         val_dataset = MagicMock()

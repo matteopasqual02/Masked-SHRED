@@ -37,13 +37,13 @@ def evaluate_model(
     
     # MSE and MRE
     if masking_type is None:
-        train_mse, train_mre = evaluate(mshred, train_dataset)
-        val_mse, val_mre = evaluate(mshred, val_dataset)
-        test_mse, test_mre = evaluate(mshred, test_dataset)
+        train_mse, train_mre, train_nrmse = evaluate(mshred, train_dataset)
+        val_mse, val_mre, val_nrmse = evaluate(mshred, val_dataset)
+        test_mse, test_mre, test_nrmse = evaluate(mshred, test_dataset)
     else:
-        train_mse, train_mre = evaluate(mshred, train_dataset, masking_type=masking_type)
-        val_mse, val_mre = evaluate(mshred, val_dataset, masking_type=masking_type)
-        test_mse, test_mre = evaluate(mshred, test_dataset, masking_type=masking_type)
+        train_mse, train_mre, train_nrmse = evaluate(mshred, train_dataset, masking_type=masking_type)
+        val_mse, val_mre, val_nrmse = evaluate(mshred, val_dataset, masking_type=masking_type)
+        test_mse, test_mre, test_nrmse = evaluate(mshred, test_dataset, masking_type=masking_type)
         
     test_error = {
         "model": model,
@@ -54,11 +54,15 @@ def evaluate_model(
         "train-mre": float(train_mre),
         "val-mre": float(val_mre),
         "test-mre": float(test_mre),
+        "train-nrmse": float(train_nrmse),
+        "val-nrmse": float(val_nrmse),
+        "test-nrmse": float(test_nrmse),
     }
     return test_error
 
 
-def plot_reconstruction(test_reconstruction, X_raw, sst_locs, index=-1):
+def plot_reconstruction(test_reconstruction, X_raw, sst_locs, index=-1 , title="None"):
+    title_save = title
     #compare the last step of the reconstruction with the original data
     last_step_hat = test_reconstruction['Surface elevation'][index]
     last_step_hat_raw = np.zeros(X_raw.shape[1])
@@ -122,7 +126,7 @@ def plot_reconstruction(test_reconstruction, X_raw, sst_locs, index=-1):
 
     plt.tight_layout()
 
-    plt.savefig('outputs/sst_reconstruction.pdf', bbox_inches='tight')
-    plt.savefig('outputs/sst_reconstruction.png', dpi=300, bbox_inches='tight')
+    #plt.savefig(f'outputs/sst_reconstruction_{title}.pdf', bbox_inches='tight')
+    plt.savefig(f'outputs/sst_reconstruction_{title_save}.png', dpi=300, bbox_inches='tight')
 
     plt.show()

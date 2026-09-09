@@ -71,9 +71,10 @@ def test_evaluate_returns_expected_metrics_shape(train_module):
     y = x.clone()
     dataset = TensorDataset(x, y)
 
-    mse, mre = train_module.evaluate(IdentityModel(), dataset, batch_size=1)
+    mse, mre, nrmse = train_module.evaluate(IdentityModel(), dataset, batch_size=1)
     assert np.isclose(mse, 0.0)
     assert np.isclose(mre, 0.0)
+    assert np.isclose(nrmse, 0.0)
 
 
 def test_fit_runs_and_returns_losses(train_module):

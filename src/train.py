@@ -230,6 +230,7 @@ def evaluate(
     total_elements = 0
     total_mre = 0.0
     total_mre_elements = 0
+    total_target_energy = 0.0
     is_mask_data = masking_type == 'mask_data'
     
     with torch.no_grad():
@@ -240,6 +241,7 @@ def evaluate(
                 loss = loss_fn(outputs, Y)          #compute the loss
                 total_loss += loss.item()           # accumulate the loss
                 total_elements += Y.numel()         # accumulate the number of elements
+                total_target_energy += Y.pow(2).sum().item()
 
                 # Mean Relative Error over the last axis, averaged over all remaining axes.
                 numerator = (Y - outputs).pow(2).sum(dim=-1).sqrt()         # compute the numerator of the relative error
@@ -253,6 +255,7 @@ def evaluate(
                 loss = loss_fn(outputs, Y)          #compute the loss
                 total_loss += loss.item()           # accumulate the loss
                 total_elements += Y.numel()         # accumulate the number of elements
+                total_target_energy += Y.pow(2).sum().item()
 
                 # Mean Relative Error over the last axis, averaged over all remaining axes.
                 numerator = (Y - outputs).pow(2).sum(dim=-1).sqrt()         # compute the numerator of the relative error
@@ -264,8 +267,9 @@ def evaluate(
     # compute the mean loss over all elements
     mse = total_loss / total_elements
     mre = total_mre / total_mre_elements
+    nrmse = ((total_loss / max(total_target_energy, eps)) ** 0.5)/2
 
-    return mse, mre
+    return mse, mre, nrmse
 
 # optimized fit function
 def fit2(

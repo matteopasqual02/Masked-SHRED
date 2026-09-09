@@ -125,9 +125,10 @@ class TestTrainEdgeCases:
         
         model = nn.Linear(3, 2)
         # batch_size=10 > dataset length=2, should handle gracefully
-        mse, mre = evaluate(model, dataset, batch_size=10)
+        mse, mre, nrmse = evaluate(model, dataset, batch_size=10)
         assert isinstance(mse, float)
         assert isinstance(mre, float)
+        assert isinstance(nrmse, float)
     
     def test_fit_with_early_stopping_patience_exceeded(self):
         """Test fit with early stopping when validation loss doesn't improve."""
