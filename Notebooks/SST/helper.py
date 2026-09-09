@@ -61,7 +61,7 @@ def evaluate_model(
     return test_error
 
 
-def plot_reconstruction(test_reconstruction, X_raw, sst_locs, index=-1 , title="None"):
+def plot_reconstruction(test_reconstruction, X_raw, sst_locs, index=-1 , title="None", save_fig=False):
     title_save = title
     #compare the last step of the reconstruction with the original data
     last_step_hat = test_reconstruction['Surface elevation'][index]
@@ -126,7 +126,10 @@ def plot_reconstruction(test_reconstruction, X_raw, sst_locs, index=-1 , title="
 
     plt.tight_layout()
 
-    #plt.savefig(f'outputs/sst_reconstruction_{title}.pdf', bbox_inches='tight')
-    plt.savefig(f'outputs/sst_reconstruction_{title_save}.png', dpi=300, bbox_inches='tight')
+    if save_fig:
+        if not os.path.exists('outputs'):
+            os.makedirs('outputs')
+        #plt.savefig(f'outputs/sst_reconstruction_{title}.pdf', bbox_inches='tight')
+        plt.savefig(f'outputs/sst_reconstruction_{title_save}.png', dpi=300, bbox_inches='tight')
 
     plt.show()
