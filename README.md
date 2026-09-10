@@ -149,6 +149,9 @@ Full experimental results, including synthetic benchmarks and the real-world hyd
 - SST
   - [1-SST_init.ipynb](Notebooks/SST/1-SST_init.ipynb) — tutorial
   - [2-SST_results.ipynb](Notebooks/SST/2-SST_results.ipynb) — results
+- SWE
+  - [1-SWE-ROM.ipynb](Notebooks/SWE/1-SWE-ROM.ipynb) — tutorial
+  - [2-SWE-ROM_results.ipynb](Notebooks/SWE/2-SWE-ROM_results.ipynb) — results 
 
 ## Citation
 
