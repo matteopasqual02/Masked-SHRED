@@ -906,7 +906,7 @@ def plot_shred_reconstruction_multi(
     cbar_tick_pt=7.5,
     cbar_unit_pt=8.5,
     symmetric_vel=False,
-    sep_lw=1.8,
+    sep_lw=0.8,
 ):
     """
     Una riga per timestep; in ogni riga 3 blocchi (una variabile ciascuno):
@@ -969,7 +969,7 @@ def plot_shred_reconstruction_multi(
         units.append(unit_map.get(u, u))
 
     # Margini (pollici)
-    lm, tm, cw, cb_text, rm = 0.55, 1.35, 0.13, 0.45, 0.1
+    lm, tm, cw, cb_text, rm = 0.55, 1.05, 0.13, 0.45, 0.1
     mh = map_height
     row_pitch = mh + row_gap
     fig_h = tm + n_rows * row_pitch - row_gap / 2 + 0.1
@@ -1056,7 +1056,7 @@ def plot_shred_reconstruction_multi(
         cb_h = 0.9 * mh
 
         y_cols_title = fig_h - tm + 0.08          # titoli colonna (sopra riga 0)
-        y_group_title = y_cols_title + 0.30       # nome variabile
+        y_group_title = y_cols_title + 0.22       # nome variabile
 
         for v, item in enumerate(items):
             xg = lm + v * (gw + group_gap)
@@ -1091,7 +1091,7 @@ def plot_shred_reconstruction_multi(
                 fig.add_artist(plt.Line2D(
                     [fx(x_sep), fx(x_sep)],
                     [fy(0.1), fy(y_group_title + 0.3)],
-                    color="0.25", lw=sep_lw, ls=(0, (6, 4)),
+                    color="0.25", lw=sep_lw, ls=(0, (4, 3)),
                 ))
 
         # etichetta data/ora a sinistra di ogni riga + separatori orizzontali
@@ -1108,7 +1108,7 @@ def plot_shred_reconstruction_multi(
                 y_sep = y_top - mh - row_gap / 2
                 fig.add_artist(plt.Line2D(
                     [0.005, 0.995], [fy(y_sep), fy(y_sep)],
-                    color="0.25", lw=sep_lw, ls=(0, (6, 4)),
+                    color="0.25", lw=sep_lw, ls=(0, (4, 3)),
                 ))
 
         # stile colorbar
