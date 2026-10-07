@@ -1,7 +1,10 @@
+import importlib.util
 import sys
 import types
+from pathlib import Path
 
 import numpy as np  # type: ignore
+import pandas as pd  # type: ignore
 import pytest  # type: ignore
 import torch  # type: ignore
 import torch.nn as nn  # type: ignore
@@ -134,3 +137,37 @@ def test_engine_sensor_to_reconstruction_and_evaluate(monkeypatch):
 
     assert set(rec.keys()) == {"setA"}
     assert rec["setA"].shape == (5, 2)
+
+
+def test_reconstruction_alignment_guard_rejects_mismatched_steps():
+    module_path = Path(__file__).resolve().parents[1] / "Notebooks" / "ORESUND" / "helper.py"
+    spec = importlib.util.spec_from_file_location("oresund_helper", module_path)
+    helper = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(helper)
+
+    ds = types.SimpleNamespace(
+        time=pd.date_range("2020-01-01", periods=10, freq="h")
+    )
+
+    with pytest.raises(ValueError, match="not aligned"):
+        helper._resolve_reconstruction_time_axis(
+            ds,
+            {
+                "Surface elevation": np.ones((8, 3)),
+                "U velocity": np.ones((9, 3)),
+            },
+            ["Surface elevation", "U velocity"],
+        )
+
+    times = helper._resolve_reconstruction_time_axis(
+        ds,
+        {
+            "Surface elevation": np.ones((8, 3)),
+            "U velocity": np.ones((8, 3)),
+        },
+        ["Surface elevation", "U velocity"],
+    )
+
+    assert len(times) == 8
+    assert times[0] == ds.time[-8]
+    assert times[-1] == ds.time[-1]
