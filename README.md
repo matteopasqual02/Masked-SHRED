@@ -7,6 +7,8 @@ Real-world sensing systems are inherently imperfect: sensors fail, disconnect in
 **Masked-SHRED** addresses this gap by introducing and systematically evaluating a hierarchy of transformer-based masking mechanisms — channel-wise, hidden-state, and multi-head self-attention masking — within the [Shallow Recurrent Decoder (SHRED)](https://arxiv.org/abs/2301.12011) framework. By incorporating the binary missingness mask at multiple levels of the architecture, the model becomes explicitly aware of sensor availability, enabling high-dimensional state estimation from sparse, asynchronous, and missing sensor measurements.
  
 We further introduce a **multi-step decoding training objective**: by decoding at intermediate timesteps and applying a weighted reconstruction loss, the model receives auxiliary supervision throughout the temporal axis, encouraging smoother and more coherent latent trajectories.
+
+![Figure 1](Images/fig1.svg)
  
 Across synthetic benchmarks and a real-world hydrodynamic dataset, we show that:
  
@@ -131,6 +133,8 @@ src/
 ## Results
 
 Full experimental results, including synthetic benchmarks and the real-world hydrodynamic dataset, are available under [`Notebooks/`](Notebooks/).
+
+The most important notebooks are listed here.
 
 - DGF
   - [0-DGF.ipynb](Notebooks/DGF/0-DGF.ipynb) — tutorial

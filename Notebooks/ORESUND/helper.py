@@ -885,6 +885,7 @@ PAPER_RC = {
 }
 C_TEXT = "#222222"
 
+
 def plot_shred_reconstruction_multi(
     test_reconstruction,
     ds,
@@ -894,23 +895,26 @@ def plot_shred_reconstruction_multi(
     cmaps=None,
     title="",
     fig_title=None,
-    font_scale=0.5,
+    font_scale=0.7,
     error_cmap="Greys",
     map_height=3.0,
     row_gap=0.55,          # spazio verticale tra le righe (contiene il separatore)
-    gap=0.08,              # GT -> SHRED
+    gap=0.4,               # GT -> SHRED (piu' spazio per i titoli colonna)
     cbar_gap=0.08,         # mappa -> colorbar
     err_gap=0.12,          # colorbar condivisa -> mappa errore
     group_gap=0.45,        # tra i blocchi di variabile (contiene il separatore)
     cbar_nbins=5,
-    cbar_tick_pt=7.5,
-    cbar_unit_pt=8.5,
+    cbar_tick_pt=10.5,
+    cbar_unit_pt=11.9,
     symmetric_vel=False,
     sep_lw=0.8,
 ):
     """
     Una riga per timestep; in ogni riga 3 blocchi (una variabile ciascuno):
     [GT | SHRED | cbar condivisa | Errore | cbar errore].
+    Le colorbar sono identiche per tutte le righe di una stessa variabile:
+    range = [min, max] su tutti i timestep selezionati (GT e SHRED insieme);
+    errore = [0, picco massimo] su tutti i timestep selezionati.
     """
     fs = lambda x: x * font_scale
 
@@ -968,8 +972,30 @@ def plot_shred_reconstruction_multi(
             u = ""
         units.append(unit_map.get(u, u))
 
+    # --- Limiti globali per variabile (su tutti i timestep selezionati) ---
+    var_lims = {}
+    err_lims = {}
+    for item in items:
+        ref_vals = np.concatenate([
+            ds[item].sel(time=t).values.ravel() for t in plot_times
+        ])
+        pred_vals = np.concatenate([
+            ds_shred[item].sel(time=t).values.ravel() for t in plot_times
+        ])
+        vmin_g = min(np.nanmin(ref_vals), np.nanmin(pred_vals))
+        vmax_g = max(np.nanmax(ref_vals), np.nanmax(pred_vals))
+        if symmetric_vel and "velocity" in item.lower():
+            lim = max(abs(vmin_g), abs(vmax_g))
+            vmin_g, vmax_g = -lim, lim
+        var_lims[item] = (float(vmin_g), float(vmax_g))
+
+        err_vals = np.concatenate([
+            ds_error[item].sel(time=t).values.ravel() for t in plot_times
+        ])
+        err_lims[item] = (0.0, float(np.nanmax(err_vals)))
+
     # Margini (pollici)
-    lm, tm, cw, cb_text, rm = 0.55, 0.65, 0.13, 0.45, 0.1
+    lm, tm, cw, cb_text, rm = 0.75, 1.15, 0.13, 0.6, 0.1
     mh = map_height
     row_pitch = mh + row_gap
     fig_h = tm + n_rows * row_pitch - row_gap / 2
@@ -994,14 +1020,10 @@ def plot_shred_reconstruction_multi(
                 prediction = ds_shred[item].sel(time=plot_time)
                 error = ds_error[item].sel(time=plot_time)
 
-                vmin = min(np.nanmin(reference.values), np.nanmin(prediction.values))
-                vmax = max(np.nanmax(reference.values), np.nanmax(prediction.values))
+                # limiti globali per variabile (uguali in tutte le righe)
+                vmin, vmax = var_lims[item]
+                err_vmax = err_lims[item][1]
                 cmap = cmaps.get(item, "viridis")
-                if symmetric_vel and "velocity" in item.lower():
-                    lim = max(abs(vmin), abs(vmax))
-                    vmin, vmax = -lim, lim
-
-                err_vmax = float(np.nanmax(error.values))
 
                 reference.plot(ax=axs[r, v, 0], title="", cmap=cmap,
                                vmin=vmin, vmax=vmax, add_colorbar=False)
@@ -1055,8 +1077,8 @@ def plot_shred_reconstruction_multi(
         fy = lambda val: val / fig_h
         cb_h = 0.9 * mh
 
-        y_cols_title = fig_h - tm + 0.02          # titoli colonna (sopra riga 0)
-        y_group_title = y_cols_title + 0.16       # nome variabile
+        y_cols_title = fig_h - tm + 0.30          # titoli colonna (sopra riga 0 e sopra le unita' colorbar)
+        y_group_title = y_cols_title + 0.40       # nome variabile
 
         for v, item in enumerate(items):
             xg = lm + v * (gw + group_gap)
@@ -1077,13 +1099,13 @@ def plot_shred_reconstruction_multi(
             for c, off in enumerate([o_gt, o_sh, o_er]):
                 fig.text(fx(xg + off + mw / 2), fy(y_cols_title), col_titles[c],
                          ha="center", va="bottom",
-                         fontsize=fs(18), fontweight="bold", color="black")
+                         fontsize=fs(22), fontweight="bold", color="black")
 
             # nome variabile sopra il blocco
             label = f"{item} [{units[v]}]" if units[v] else item
             fig.text(fx(xg + gw / 2), fy(y_group_title), label,
                      ha="center", va="bottom",
-                     fontsize=fs(24), fontweight="bold", color=C_TEXT)
+                     fontsize=fs(30), fontweight="bold", color=C_TEXT)
 
             # separatore verticale tra blocchi-variabile
             if v < n_vars - 1:
@@ -1099,7 +1121,7 @@ def plot_shred_reconstruction_multi(
             y_top = fig_h - tm - r * row_pitch
             y_mid = y_top - mh / 2
             ts = pd.Timestamp(plot_time)
-            fig.text(fx(lm - 0.12), fy(y_mid),
+            fig.text(fx(lm - 0.15), fy(y_mid),
                      f"{ts:%Y-%m-%d}\n{ts:%H:%M}",
                      rotation=90, va="center", ha="right",
                      fontsize=fs(22), fontweight="bold", color=C_TEXT)
@@ -1132,3 +1154,5 @@ def plot_shred_reconstruction_multi(
         plt.show()
 
     del fig, axs, ds_shred, ds_error, reconstructions
+
+    
