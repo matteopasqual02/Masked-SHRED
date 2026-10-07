@@ -285,3 +285,298 @@ def align_ds(test_idx, ds, permuted_indices, lenmonths, geom):
             )
         )
     return mikeio.Dataset(ds_ref_arrays)
+
+import numpy as np
+import pandas as pd
+import mikeio
+import matplotlib.pyplot as plt
+from pathlib import Path
+from matplotlib.cm import ScalarMappable
+from matplotlib.colors import Normalize
+from matplotlib.ticker import MaxNLocator
+
+PAPER_RC = {
+    "font.family": "serif",
+    "font.serif": ["Times New Roman", "DejaVu Serif"],
+    "mathtext.fontset": "stix",
+    "axes.linewidth": 0.9,
+    "pdf.fonttype": 42,
+    "ps.fonttype": 42,
+}
+C_TEXT = "#222222"
+
+
+def plot_shred_reconstruction_multi(
+    test_reconstruction,
+    ds,
+    geom,
+    time_idxs=(-10000, -5000, -1),
+    items=None,
+    cmaps=None,
+    title="",
+    fig_title=None,
+    font_scale=1.4,
+    error_cmap="Greys",
+    map_height=3.0,
+    row_gap=0.7,           # spazio verticale tra le righe (contiene il separatore + unita' colorbar)
+    gap=0.9,               # GT -> SHRED (prima 0.4)
+    cbar_gap=0.2,          # mappa -> colorbar (prima 0.08)
+    err_gap=0.35,          # colorbar condivisa -> mappa errore (prima 0.12)
+    group_gap=0.9,         # tra i blocchi di variabile (prima 0.45)
+    title_pad=0.75,        # spazio extra sotto i titoli delle subplot
+    cbar_nbins=6,
+    cbar_tick_pt=18,       # numeri sulla colorbar (prima 11)
+    cbar_unit_pt=20,       # unita' [m], [m/s] sopra la colorbar (prima 12.5)
+    cbar_width=0.35,       # spessore barra in pollici (prima 0.13)
+    cbar_text_space=0.9,  # spazio per i numeri a destra della barra (prima 0.6)
+    cbar_height_frac=1.1,  # altezza colorbar rispetto alla mappa (prima 0.9)
+    symmetric_vel=False,
+    sep_lw=0.8,
+):
+    """
+    Una riga per timestep; in ogni riga 3 blocchi (una variabile ciascuno):
+    [GT | SHRED | cbar condivisa | Errore | cbar errore].
+    Le colorbar sono identiche per tutte le righe di una stessa variabile:
+    range = [min, max] su tutti i timestep selezionati (GT e SHRED insieme);
+    errore = [0, picco massimo] su tutti i timestep selezionati.
+    """
+    fs = lambda x: x * font_scale
+
+    if items is None:
+        items = ["Surface elevation", "U velocity", "V velocity"]
+    items = [items] if isinstance(items, str) else list(items)
+
+    if cmaps is None:
+        cmaps = {"Surface elevation": "terrain",
+                 "U velocity": "twilight_shifted",
+                 "V velocity": "twilight_shifted"}
+
+    missing = [i for i in items if i not in test_reconstruction]
+    if missing:
+        raise KeyError(f"Missing items: {missing}. Available: {list(test_reconstruction.keys())}")
+
+    times_test = ds.time[-test_reconstruction[items[0]].shape[0]:]
+
+    # --- ricostruzione (una sola volta) ---
+    reconstructions = {}
+    for item in items:
+        full = np.full((test_reconstruction[item].shape[0], ds[item].values.shape[1]), np.nan)
+        valid_cols = ~np.isnan(ds[item].values).any(axis=0)
+        full[:, valid_cols] = test_reconstruction[item]
+        reconstructions[item] = full
+
+    ds_shred = mikeio.Dataset([
+        mikeio.DataArray(data=reconstructions[item], time=times_test,
+                         item=ds[item].item, geometry=geom)
+        for item in items
+    ])
+    ds_error = mikeio.Dataset([
+        mikeio.DataArray(
+            data=np.abs(ds[item].sel(time=times_test).values - ds_shred[item].values),
+            time=times_test, item=ds[item].item, geometry=geom,
+        )
+        for item in items
+    ])
+
+    n_test = len(ds_shred.time)
+    plot_times = []
+    for ti in time_idxs:
+        if not -n_test <= ti < n_test:
+            raise IndexError(f"time_idx={ti} fuori range: il test set ha {n_test} timestep.")
+        plot_times.append(ds_shred.time[ti])
+
+    n_rows, n_vars = len(plot_times), len(items)
+    col_titles = ["Ground Truth", "Masked SHRED", "Absolute error"]
+    unit_map = {"meter": "m", "meter_per_sec": "m/s"}
+    units = []
+    for it in items:
+        try:
+            u = ds[it].unit.name
+        except Exception:
+            u = ""
+        units.append(unit_map.get(u, u))
+
+    # --- Limiti globali per variabile (su tutti i timestep selezionati) ---
+    var_lims = {}
+    err_lims = {}
+    for item in items:
+        ref_vals = np.concatenate([
+            ds[item].sel(time=t).values.ravel() for t in plot_times
+        ])
+        pred_vals = np.concatenate([
+            ds_shred[item].sel(time=t).values.ravel() for t in plot_times
+        ])
+        vmin_g = min(np.nanmin(ref_vals), np.nanmin(pred_vals))
+        vmax_g = max(np.nanmax(ref_vals), np.nanmax(pred_vals))
+        if symmetric_vel and "velocity" in item.lower():
+            lim = max(abs(vmin_g), abs(vmax_g))
+            vmin_g, vmax_g = -lim, lim
+        var_lims[item] = (float(vmin_g), float(vmax_g))
+
+        err_vals = np.concatenate([
+            ds_error[item].sel(time=t).values.ravel() for t in plot_times
+        ])
+        err_lims[item] = (0.0, float(np.nanmax(err_vals)))
+
+    # Margini (pollici)
+    lm, tm, rm = 0.85, 1.4, 0.1
+    cw, cb_text = cbar_width, cbar_text_space
+    mh = map_height
+    row_pitch = mh + row_gap
+    fig_h = tm + n_rows * row_pitch - row_gap / 2
+
+    with plt.rc_context(PAPER_RC):
+        fig = plt.figure(figsize=(10, fig_h))
+        fig.patch.set_facecolor("white")
+
+        axs = np.empty((n_rows, n_vars, 3), dtype=object)
+        cax_s = np.empty((n_rows, n_vars), dtype=object)
+        cax_e = np.empty((n_rows, n_vars), dtype=object)
+        colorbars = []
+
+        for r, plot_time in enumerate(plot_times):
+            for v, item in enumerate(items):
+                for c in range(3):
+                    axs[r, v, c] = fig.add_axes([0.05, 0.05, 0.1, 0.1])
+                cax_s[r, v] = fig.add_axes([0.05, 0.05, 0.02, 0.1])
+                cax_e[r, v] = fig.add_axes([0.05, 0.05, 0.02, 0.1])
+
+                reference = ds[item].sel(time=plot_time)
+                prediction = ds_shred[item].sel(time=plot_time)
+                error = ds_error[item].sel(time=plot_time)
+
+                # limiti globali per variabile (uguali in tutte le righe)
+                vmin, vmax = var_lims[item]
+                err_vmax = err_lims[item][1]
+                cmap = cmaps.get(item, "viridis")
+
+                reference.plot(ax=axs[r, v, 0], title="", cmap=cmap,
+                               vmin=vmin, vmax=vmax, add_colorbar=False)
+                prediction.plot(ax=axs[r, v, 1], title="", cmap=cmap,
+                                vmin=vmin, vmax=vmax, add_colorbar=False)
+                error.plot(ax=axs[r, v, 2], title="", cmap=error_cmap,
+                           vmin=0.0, vmax=err_vmax, add_colorbar=False)
+
+                for c in range(3):
+                    ax = axs[r, v, c]
+                    ax.set_axis_off()
+                    ax.set_xlabel("")
+                    ax.set_ylabel("")
+
+                sm = ScalarMappable(norm=Normalize(vmin=vmin, vmax=vmax), cmap=cmap)
+                sm.set_array([])
+                colorbars.append(fig.colorbar(sm, cax=cax_s[r, v]))
+
+                sm_e = ScalarMappable(norm=Normalize(vmin=0.0, vmax=err_vmax), cmap=error_cmap)
+                sm_e.set_array([])
+                colorbars.append(fig.colorbar(sm_e, cax=cax_e[r, v]))
+
+                u = units[v]
+                for cax in (cax_s[r, v], cax_e[r, v]):
+                    cax.set_title(f"[{u}]" if u else "", fontsize=cbar_unit_pt, pad=6)
+
+        for cb in colorbars:
+            cb.locator = MaxNLocator(nbins=cbar_nbins)
+            cb.update_ticks()
+
+        # --- Layout in pollici ---
+        ax0 = axs[0, 0, 0]
+        x0, x1 = ax0.get_xlim()
+        y0, y1 = ax0.get_ylim()
+        asp = ax0.get_aspect()
+        asp = 1.0 if isinstance(asp, str) else float(asp)
+        ratio = abs((x1 - x0) / (y1 - y0)) / asp
+        mw = ratio * mh
+
+        # offset interni a un blocco-variabile
+        o_gt = 0.0
+        o_sh = o_gt + mw + gap
+        o_cb = o_sh + mw + cbar_gap
+        o_er = o_cb + cw + cb_text + err_gap
+        o_ecb = o_er + mw + cbar_gap
+        gw = o_ecb + cw + cb_text           # larghezza di un blocco-variabile
+
+        fig_w = lm + n_vars * gw + (n_vars - 1) * group_gap + rm
+        fig.set_size_inches(fig_w, fig_h)
+        fx = lambda val: val / fig_w
+        fy = lambda val: val / fig_h
+        cb_h = cbar_height_frac * mh
+        cb_off = (mh - cb_h) / 2            # colorbar centrata verticalmente sulla mappa
+
+        y_cols_title = fig_h - tm + 0.45 + title_pad          # titoli colonna (sopra riga 0 e sopra le unita' colorbar)
+        y_group_title = y_cols_title + 0.50 + title_pad / 2    # nome variabile
+
+        for v, item in enumerate(items):
+            xg = lm + v * (gw + group_gap)
+
+            for r in range(n_rows):
+                y_top = fig_h - tm - r * row_pitch
+                y_bot = y_top - mh
+
+                for c, off in enumerate([o_gt, o_sh, o_er]):
+                    axs[r, v, c].set_aspect("auto")
+                    axs[r, v, c].set_position([fx(xg + off), fy(y_bot), fx(mw), fy(mh)])
+
+                cax_s[r, v].set_position([fx(xg + o_cb), fy(y_bot + cb_off), fx(cw), fy(cb_h)])
+                cax_e[r, v].set_position([fx(xg + o_ecb), fy(y_bot + cb_off), fx(cw), fy(cb_h)])
+
+            # titoli colonna (solo riga 0)
+            for c, off in enumerate([o_gt, o_sh, o_er]):
+                fig.text(fx(xg + off + mw / 2), fy(y_cols_title), col_titles[c],
+                         ha="center", va="bottom",
+                         fontsize=fs(22), fontweight="bold", color="black")
+
+            # nome variabile sopra il blocco
+            label = f"{item} [{units[v]}]" if units[v] else item
+            fig.text(fx(xg + gw / 2), fy(y_group_title), label,
+                     ha="center", va="bottom",
+                     fontsize=fs(30), fontweight="bold", color=C_TEXT)
+
+            # separatore verticale tra blocchi-variabile
+            if v < n_vars - 1:
+                x_sep = xg + gw + group_gap / 2
+                fig.add_artist(plt.Line2D(
+                    [fx(x_sep), fx(x_sep)],
+                    [fy(0.1), fy(y_group_title + 0.3)],
+                    color="0.25", lw=sep_lw, ls=(0, (4, 3)),
+                ))
+
+        # etichetta data/ora a sinistra di ogni riga + separatori orizzontali
+        for r, plot_time in enumerate(plot_times):
+            y_top = fig_h - tm - r * row_pitch
+            y_mid = y_top - mh / 2
+            ts = pd.Timestamp(plot_time)
+            fig.text(fx(lm - 0.15), fy(y_mid),
+                     f"{ts:%Y-%m-%d}\n{ts:%H:%M}",
+                     rotation=90, va="center", ha="right",
+                     fontsize=fs(22), fontweight="bold", color=C_TEXT)
+
+            if r < n_rows - 1:
+                y_sep = y_top - mh - row_gap / 2
+                fig.add_artist(plt.Line2D(
+                    [0.005, 0.995], [fy(y_sep), fy(y_sep)],
+                    color="0.25", lw=sep_lw, ls=(0, (4, 3)),
+                ))
+
+        # stile colorbar
+        main_axes = set(axs.ravel())
+        for cax in fig.axes:
+            if cax in main_axes:
+                continue
+            cax.tick_params(labelsize=cbar_tick_pt, width=1.2, length=5)
+            for spine in cax.spines.values():
+                spine.set_linewidth(0.8)
+                spine.set_color("0.4")
+
+        try:
+            base_dir = Path(__file__).resolve().parent
+        except NameError:
+            base_dir = Path.cwd()
+        output_path = base_dir / f"{title}.png"
+        fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.02, facecolor="white")
+        print(f"Saved plot: {output_path}")
+
+        plt.show()
+
+    del fig, axs, ds_shred, ds_error, reconstructions
+
