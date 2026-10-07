@@ -969,10 +969,10 @@ def plot_shred_reconstruction_multi(
         units.append(unit_map.get(u, u))
 
     # Margini (pollici)
-    lm, tm, cw, cb_text, rm = 0.55, 1.05, 0.13, 0.45, 0.1
+    lm, tm, cw, cb_text, rm = 0.55, 0.65, 0.13, 0.45, 0.1
     mh = map_height
     row_pitch = mh + row_gap
-    fig_h = tm + n_rows * row_pitch - row_gap / 2 + 0.1
+    fig_h = tm + n_rows * row_pitch - row_gap / 2
 
     with plt.rc_context(PAPER_RC):
         fig = plt.figure(figsize=(10, fig_h))
@@ -1055,8 +1055,8 @@ def plot_shred_reconstruction_multi(
         fy = lambda val: val / fig_h
         cb_h = 0.9 * mh
 
-        y_cols_title = fig_h - tm + 0.08          # titoli colonna (sopra riga 0)
-        y_group_title = y_cols_title + 0.22       # nome variabile
+        y_cols_title = fig_h - tm + 0.02          # titoli colonna (sopra riga 0)
+        y_group_title = y_cols_title + 0.16       # nome variabile
 
         for v, item in enumerate(items):
             xg = lm + v * (gw + group_gap)
@@ -1121,19 +1121,12 @@ def plot_shred_reconstruction_multi(
                 spine.set_linewidth(0.6)
                 spine.set_color("0.5")
 
-        # titolo unico
-        main_title = fig_title if fig_title is not None else title
-        if main_title:
-            fig.text(0.5, fy(fig_h - 0.05), main_title,
-                     ha="center", va="top",
-                     fontsize=fs(30), fontweight="bold", color=C_TEXT)
-
         try:
             base_dir = Path(__file__).resolve().parent
         except NameError:
             base_dir = Path.cwd()
         output_path = base_dir / f"{title}.png"
-        fig.savefig(output_path, dpi=300, bbox_inches="tight", facecolor="white")
+        fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.02, facecolor="white")
         print(f"Saved plot: {output_path}")
 
         plt.show()
