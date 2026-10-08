@@ -1148,7 +1148,7 @@ def plot_shred_reconstruction_multi(
         except NameError:
             base_dir = Path.cwd()
         output_path = base_dir / f"{title}.png"
-        fig.savefig(output_path, dpi=300, bbox_inches="tight", pad_inches=0.02, facecolor="white")
+        fig.savefig(output_path, dpi=600, bbox_inches="tight", pad_inches=0.02, facecolor="white")
         print(f"Saved plot: {output_path}")
 
         plt.show()
