@@ -1,5 +1,7 @@
 import numpy as np  #type: ignore
 import matplotlib.pyplot as plt  #type: ignore
+import torch  #type: ignore
+from torch.utils.data import DataLoader  #type: ignore
 
 ## This file contains utility functions for data imputation and preprocessing, including:
 # - get_train_medians: compute the median of each sensor from the training data
@@ -279,16 +281,49 @@ def evaluate_model(
     type,
     masking_type=None,
 ):
+    def _compute_nrmse(dataset):
+        mse_loss = torch.nn.MSELoss(reduction="sum")
+        dataloader = DataLoader(dataset, batch_size=64, shuffle=False)
+        total_loss = 0.0
+        total_target_energy = 0.0
+        is_mask_data = masking_type == "mask_data"
+
+        mshred.eval()
+        with torch.no_grad():
+            if is_mask_data:
+                for X, M, Y in dataloader:
+                    outputs = mshred(X, M)
+                    total_loss += mse_loss(outputs, Y).item()
+                    total_target_energy += Y.pow(2).sum().item()
+            else:
+                for X, Y in dataloader:
+                    outputs = mshred(X)
+                    total_loss += mse_loss(outputs, Y).item()
+                    total_target_energy += Y.pow(2).sum().item()
+
+        return ((total_loss / max(total_target_energy, 1e-12)) ** 0.5) / 2
+
+    def _evaluate_with_optional_nrmse(dataset):
+        results = evaluate(mshred, dataset, masking_type=masking_type) if masking_type is not None else evaluate(mshred, dataset)
+        if len(results) == 3:
+            return results
+        if hasattr(results, "nrmse"):
+            mse, mre = results
+            return mse, mre, float(results.nrmse)
+        if len(results) == 2:
+            mse, mre = results
+            return mse, mre, _compute_nrmse(dataset)
+        raise ValueError(f"Expected evaluate() to return 2 or 3 values, got {len(results)}")
     
     # MSE and MRE
     if masking_type is None:
-        train_mse, train_mre, train_nrmse = evaluate(mshred, train_dataset)
-        val_mse, val_mre, val_nrmse = evaluate(mshred, val_dataset)
-        test_mse, test_mre, test_nrmse = evaluate(mshred, test_dataset)
+        train_mse, train_mre, train_nrmse = _evaluate_with_optional_nrmse(train_dataset)
+        val_mse, val_mre, val_nrmse = _evaluate_with_optional_nrmse(val_dataset)
+        test_mse, test_mre, test_nrmse = _evaluate_with_optional_nrmse(test_dataset)
     else:
-        train_mse, train_mre, train_nrmse = evaluate(mshred, train_dataset, masking_type=masking_type)
-        val_mse, val_mre, val_nrmse = evaluate(mshred, val_dataset, masking_type=masking_type)
-        test_mse, test_mre, test_nrmse = evaluate(mshred, test_dataset, masking_type=masking_type)
+        train_mse, train_mre, train_nrmse = _evaluate_with_optional_nrmse(train_dataset)
+        val_mse, val_mre, val_nrmse = _evaluate_with_optional_nrmse(val_dataset)
+        test_mse, test_mre, test_nrmse = _evaluate_with_optional_nrmse(test_dataset)
         
     test_error = {
         "model": model,

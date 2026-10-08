@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Union, List, Tuple, Optional #type: ignore
 import copy                                     #type: ignore
 import torch                                    #type: ignore
@@ -5,6 +6,20 @@ from torch.utils.data import DataLoader         #type: ignore
 from tqdm import tqdm                           #type: ignore
 
 from .mSHRED.mSHRED import mSHRED
+
+
+@dataclass(frozen=True)
+class _LaggedEvaluationResult:
+    mse: float
+    mre: float
+    nrmse: float
+
+    def __iter__(self):
+        yield self.mse
+        yield self.mre
+
+    def __len__(self):
+        return 2
 
 ## error metrics mre
 def mre(datatrue, datapred):
@@ -928,6 +943,7 @@ def lagged_evaluate(
     total_elements = 0
     total_mre = 0.0
     total_mre_elements = 0
+    total_target_energy = 0.0
     is_mask_data = masking_type == 'mask_data'
     
     with torch.no_grad():
@@ -939,6 +955,7 @@ def lagged_evaluate(
                 loss = loss_fn(outputs, Y)          #compute the loss
                 total_loss += loss.item()           # accumulate the loss
                 total_elements += Y.numel()         # accumulate the number of elements
+                total_target_energy += Y.pow(2).sum().item()
 
                 # Mean Relative Error over the last axis, averaged over all remaining axes.
                 numerator = (Y - outputs).pow(2).sum(dim=-1).sqrt()         # compute the numerator of the relative error
@@ -953,6 +970,7 @@ def lagged_evaluate(
                 loss = loss_fn(outputs, Y)          #compute the loss
                 total_loss += loss.item()           # accumulate the loss
                 total_elements += Y.numel()         # accumulate the number of elements
+                total_target_energy += Y.pow(2).sum().item()
 
                 # Mean Relative Error over the last axis, averaged over all remaining axes.
                 numerator = (Y - outputs).pow(2).sum(dim=-1).sqrt()         # compute the numerator of the relative error
@@ -964,5 +982,6 @@ def lagged_evaluate(
     # compute the mean loss over all elements
     mse = total_loss / total_elements
     mre = total_mre / total_mre_elements
+    nrmse = ((total_loss / max(total_target_energy, eps)) ** 0.5) / 2
 
-    return mse, mre
+    return _LaggedEvaluationResult(mse=mse, mre=mre, nrmse=nrmse)
