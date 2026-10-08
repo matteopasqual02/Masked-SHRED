@@ -3,8 +3,16 @@ from types import SimpleNamespace           #type: ignore
 
 
 class mSHRED(nn.Module):
+    """SHRED encoder-decoder model with selectable sequence encoders.
+
+    ``args`` may be a dictionary or namespace. Required fields depend on the
+    selected encoder and decoder; see the README quickstart for a configuration.
+    Supported encoders include transformer variants, LSTM, xLSTM, GRU-D, and
+    attention GRU-D. Supported decoders are ``mlp`` and ``cnn``.
+    """
 
     def __init__(self,args):
+        """Build the configured encoder and decoder from model arguments."""
 
         super().__init__()
         if isinstance(args, dict):
@@ -135,6 +143,15 @@ class mSHRED(nn.Module):
         
 
     def forward(self, x, mask=None):
+        """Encode sensor histories and decode a full-state estimate.
+
+        Args:
+            x: Batched sensor history in the layout expected by the encoder.
+            mask: Optional observation mask for encoders that consume one.
+        Returns:
+            A batch of decoded states, or a list of outputs when
+            ``decoder_3D`` is enabled.
+        """
 
         # Check if encoder and decoder are implemented
         if self.encoder is None:
@@ -156,6 +173,7 @@ class mSHRED(nn.Module):
             return self.decoder(encoded[-1])  # Use the last time step's output for decoding
         
     def freeze(self):
+        """Switch to evaluation mode and disable gradients for all parameters."""
 
         # Freeze the model parameters
         self.eval()
@@ -163,10 +181,11 @@ class mSHRED(nn.Module):
             param.requires_grad = False
     
     def unfreeze(self):
+        """Switch to training mode and enable gradients for all parameters."""
 
         # Unfreeze the model parameters
         self.train()
         for param in self.parameters():
             param.requires_grad = True
 
-        
+
