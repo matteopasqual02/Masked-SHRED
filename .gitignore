@@ -1,5 +1,8 @@
 __pycache__
 
+# uv virtual environment (recreated with `uv sync`)
+.venv/
+
 # Folder datasets
 datasets
 
@@ -9,3 +12,6 @@ outputs
 # Folder models
 models
 model
+
+# Environment files
+.env

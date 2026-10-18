@@ -31,8 +31,8 @@ Across synthetic benchmarks and a real-world hydrodynamic dataset, we show that:
 ```bash
 git clone https://github.com/matteopasqual02/Masked-SHRED.git
 cd masked-shred
+uv sync --all-groups
 ```
-
 
 ## Quickstart
  
