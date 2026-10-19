@@ -9,4 +9,11 @@ cd "$REPO_ROOT"
 uv run python Images/scripts/reduce_image_dpi.py \
     Images \
     Images/Images_low \
+    --ratio 6 \
     --dpi 300
+uv run python Images/scripts/reduce_image_dpi.py \
+    Images \
+    Images/Images_low \
+    --ratio 12 \
+    --dpi 300 \
+    --name-contains reconstruction_grid
