@@ -137,6 +137,7 @@ class mSHRED(nn.Module):
                 output_size=args.output_size,
                 hidden_sizes=args.decoder_hidden_sizes,
                 dropout=args.dropout,
+                kernel_size=getattr(args, "kernel_size", 1),
             )
         else:
             raise NotImplementedError(f"Decoder {args.decoder} not implemented")

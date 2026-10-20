@@ -12,6 +12,9 @@ class CNN(nn.Module):
         output_size: int,           #output size
         hidden_sizes: np.ndarray,   #hidden layer sizes
         dropout: float = 0.1,       #dropout rate
+        kernel_size: int = 1,       #kernel size
+        stride: int = 1,            #stride
+        padding: int = 0            #padding
     ):
         
         super().__init__()
@@ -28,7 +31,7 @@ class CNN(nn.Module):
 
         # Kernel size 1 preserves sequence length while transforming channels.
         self.layers = nn.ModuleList([
-            nn.Conv1d(channels[i], channels[i + 1], kernel_size=1)
+            nn.Conv1d(channels[i], channels[i + 1], kernel_size=kernel_size, stride=stride, padding=padding)
             for i in range(len(channels) - 1)
         ])
 
