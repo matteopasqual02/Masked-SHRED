@@ -163,5 +163,4 @@ TODO
 
 ## License
  
-This project is released under the [MIT License](LICENSE) — update this section if a different license applies.
- 
+This project is released under the [MIT License](LICENSE)
