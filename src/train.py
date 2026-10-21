@@ -282,7 +282,7 @@ def evaluate(
     # compute the mean loss over all elements
     mse = total_loss / total_elements
     mre = total_mre / total_mre_elements
-    nrmse = ((total_loss / max(total_target_energy, eps)) ** 0.5)/2
+    nrmse = ((total_loss / max(total_target_energy, eps)) ** 0.5)
 
     return mse, mre, nrmse
 
@@ -982,6 +982,6 @@ def lagged_evaluate(
     # compute the mean loss over all elements
     mse = total_loss / total_elements
     mre = total_mre / total_mre_elements
-    nrmse = ((total_loss / max(total_target_energy, eps)) ** 0.5) / 2
+    nrmse = ((total_loss / max(total_target_energy, eps)) ** 0.5)
 
     return _LaggedEvaluationResult(mse=mse, mre=mre, nrmse=nrmse)
