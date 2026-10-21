@@ -136,24 +136,30 @@ Full experimental results, including synthetic benchmarks and the real-world hyd
 
 The most important notebooks are listed here.
 
-- DGF
+- DGF (simulated data)
   - [0-DGF.ipynb](Notebooks/DGF/0-DGF.ipynb) — tutorial
   - [1-DGF_results.ipynb](Notebooks/DGF/1-DGF_results.ipynb) — results
-- HYDRO
+- HYDRO (real data)
   - [1-HYDRO_baseline.ipynb](Notebooks/HYDRO/1-HYDRO_baseline.ipynb) — tutorial / baseline
   - [2-HYDRO_masking.ipynb](Notebooks/HYDRO/2-HYDRO_masking.ipynb) — tutorial / masking
   - [4-HYDRO_results.ipynb](Notebooks/HYDRO/4-HYDRO_results.ipynb) — results
   - [4b-HYDRO_results_ErrorAccumulation.ipynb](Notebooks/HYDRO/4b-HYDRO_results_ErrorAccumulation.ipynb) — error accumulation
   - [5-HYDRO_results_TUNING.ipynb](Notebooks/HYDRO/5-HYDRO_results_TUNING.ipynb) — hyperparameter tuning
   - [7-HYDRO_LAGGED_training.ipynb](Notebooks/HYDRO/7-HYDRO_LAGGED_training.ipynb) — lagged training
-- ORESUND
+- ORESUND (real data)
   - [0-ORESUND_exploration.ipynb](Notebooks/ORESUND/0-ORESUND_exploration.ipynb) — tutorial
   - [1-ORESUND_RESULT.ipynb](Notebooks/ORESUND/1-ORESUND_RESULT.ipynb) — results
   - [2-ORESUND_LAGGED.ipynb](Notebooks/ORESUND/2-ORESUND_LAGGED.ipynb) — lagged training
-- SST
+- SST (simulated data)
+  - [0-SST_downloader.ipynb](Notebooks/SST/0-SST_downloader.ipynb) — dataset download
   - [1-SST_init.ipynb](Notebooks/SST/1-SST_init.ipynb) — tutorial
   - [2-SST_results.ipynb](Notebooks/SST/2-SST_results.ipynb) — results
-- SWE
+- SST + BUOY DATA (real data)
+  - [3-SST_BuoyData.ipynb](Notebooks/SST/3-SST_BuoyData.ipynb) — buoy-data tutorial
+  - [4-SST_BuoyData_results.ipynb](Notebooks/SST/4-SST_BuoyData_results.ipynb) — results
+  - [5-SST_BuoyData_cs_shred.ipynb](Notebooks/SST/5-SST_BuoyData_cs_shred.ipynb) — CS-SHRED results
+- SWE (simulated data)
+  - [0-SWE-ROM_exploration.ipynb](Notebooks/SWE/0-SWE-ROM_exploration.ipynb) — dataset download and exploration
   - [1-SWE-ROM.ipynb](Notebooks/SWE/1-SWE-ROM.ipynb) — tutorial
   - [2-SWE-ROM_results.ipynb](Notebooks/SWE/2-SWE-ROM_results.ipynb) — results 
 
