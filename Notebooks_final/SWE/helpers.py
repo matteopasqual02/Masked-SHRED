@@ -1,22 +1,83 @@
-import numpy as np
+"""Plotting and preprocessing helpers for the SWE notebooks."""
+
+import matplotlib as mpl
+import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
-from pathlib import Path
+import numpy as np
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
+from matplotlib.lines import Line2D
+from matplotlib.patches import Patch
+from matplotlib.text import Text
 from matplotlib.ticker import MaxNLocator
-import matplotlib as mpl
+from pathlib import Path
+from types import SimpleNamespace
 
+
+# ------------------------------------------------------------------
+# Shared style and plotting constants
+# ------------------------------------------------------------------
 PAPER_RC = {
     "font.family": "serif",
     "font.serif": ["Times New Roman", "DejaVu Serif"],
     "mathtext.fontset": "stix",
     "axes.linewidth": 0.9,
+    "xtick.direction": "out",
+    "xtick.major.width": 0.9,
+    "xtick.major.size": 4,
     "pdf.fonttype": 42,
     "ps.fonttype": 42,
 }
+
 C_TEXT = "#222222"
+C_DATA = "#1f4e79"      # valid measurements
+C_NAN = "#c8553d"       # missing data
+C_BAND = "#f2f4f7"      # alternating row band
+C_MARK = "#c8553d"      # map sensor markers
 
 
+# ------------------------------------------------------------------
+# Data preprocessing
+# ------------------------------------------------------------------
+def ROM_data_preprocessing(sensors_data, H,  Utheta, Uphi, augmentation_factor=2):
+    np.random.seed(42)  # For reproducibility
+
+    print("Sensors data shape:\t", sensors_data.shape)
+    print("H shape:\t\t", H.shape)
+    print("Utheta shape:\t\t", Utheta.shape)
+    print("Uphi shape:\t\t", Uphi.shape)
+
+    for _ in range(augmentation_factor - 1):
+        H = np.vstack((H, H))  # Duplicate the data
+        H = H + np.random.normal(0, 0.001, H.shape)  # Add small Gaussian noise for augmentation
+        Utheta = np.vstack((Utheta, Utheta))  # Duplicate the data
+        Utheta = Utheta + np.random.normal(0, 0.001, Utheta.shape)  # Add small Gaussian noise for augmentation
+        Uphi = np.vstack((Uphi, Uphi))  # Duplicate the data
+        Uphi = Uphi + np.random.normal(0, 0.001, Uphi.shape)  # Add small Gaussian noise for augmentation
+        sensors_data = np.vstack((sensors_data, sensors_data))  # Duplicate the data
+        sensors_data = sensors_data + np.random.normal(0, 0.001, sensors_data.shape)  # Add small Gaussian noise for augmentation
+        
+    H = H.reshape(16, -1, 131072)
+    Utheta = Utheta.reshape(16, -1, 131072)
+    Uphi = Uphi.reshape(16, -1, 131072)
+    sensors_data = sensors_data.reshape(16, -1, 10)
+
+    permutation = np.random.permutation(sensors_data.shape[0])
+    sensors_data = sensors_data[permutation]
+    H = H[permutation]
+    Utheta = Utheta[permutation]
+    Uphi = Uphi[permutation]
+
+    print("\nSensors data shape:\t", sensors_data.shape)
+    print("H shape:\t\t", H.shape)  
+    print("Utheta shape:\t\t", Utheta.shape)
+    print("Uphi shape:\t\t", Uphi.shape)
+
+    return sensors_data, H, Utheta, Uphi
+
+# ------------------------------------------------------------------
+# Sphere rendering helpers
+# ------------------------------------------------------------------
 def _sphere_geometry(Lx, Ly, n_pix=600, elev_deg=20.0, azim_deg=0.0,
                      light=(-0.45, 0.55, 0.70)):
     """Orthographic sphere: pixel -> (lat, lon) -> bilinear sampling indices + shading."""
@@ -46,7 +107,6 @@ def _sphere_geometry(Lx, Ly, n_pix=600, elev_deg=20.0, azim_deg=0.0,
     return dict(n_pix=n_pix, mask=mask, r0=r0, r1=r1, c0=c0, c1=c1, wr=wr, wc=wc,
                 shade=shade, t=t, az=az, Lx=Lx, Ly=Ly)
 
-
 def _project(geo, lat, lon):
     """(lat, lon) in radians -> screen x, y and visibility."""
     t, az = geo["t"], geo["az"]
@@ -56,7 +116,6 @@ def _project(geo, lat, lon):
     y = py * np.cos(t) - pz * np.sin(t)
     z = py * np.sin(t) + pz * np.cos(t)
     return x, y, z > 0
-
 
 def _render_sphere(field, geo, cmap, norm):
     g = geo
@@ -69,7 +128,6 @@ def _render_sphere(field, geo, cmap, norm):
     img = np.zeros((g["n_pix"], g["n_pix"], 4))
     img[g["mask"]] = rgba
     return img
-
 
 def _draw_sphere(ax, field, geo, cmap, norm, sensors=None, show_equator=True):
     ax.imshow(_render_sphere(field, geo, cmap, norm), origin="lower",
@@ -90,7 +148,9 @@ def _draw_sphere(ax, field, geo, cmap, norm, sensors=None, show_equator=True):
     ax.set_aspect("equal")
     ax.set_axis_off()
 
-
+# ------------------------------------------------------------------
+# SHRED reconstruction plots
+# ------------------------------------------------------------------
 def plot_shred_reconstruction_multi(
     test_reconstruction,          # dict: item -> (n_test, Lx*Ly)
     ground_truth,                 # dict: item -> (n_test, Lx*Ly), same test split / order
@@ -281,75 +341,8 @@ def plot_shred_reconstruction_multi(
 
     del fig, gt, pred, err
 
-def ROM_data_preprocessing(sensors_data, H,  Utheta, Uphi, augmentation_factor=2):
-    np.random.seed(42)  # For reproducibility
-
-    print("Sensors data shape:\t", sensors_data.shape)
-    print("H shape:\t\t", H.shape)
-    print("Utheta shape:\t\t", Utheta.shape)
-    print("Uphi shape:\t\t", Uphi.shape)
-
-    for _ in range(augmentation_factor - 1):
-        H = np.vstack((H, H))  # Duplicate the data
-        H = H + np.random.normal(0, 0.001, H.shape)  # Add small Gaussian noise for augmentation
-        Utheta = np.vstack((Utheta, Utheta))  # Duplicate the data
-        Utheta = Utheta + np.random.normal(0, 0.001, Utheta.shape)  # Add small Gaussian noise for augmentation
-        Uphi = np.vstack((Uphi, Uphi))  # Duplicate the data
-        Uphi = Uphi + np.random.normal(0, 0.001, Uphi.shape)  # Add small Gaussian noise for augmentation
-        sensors_data = np.vstack((sensors_data, sensors_data))  # Duplicate the data
-        sensors_data = sensors_data + np.random.normal(0, 0.001, sensors_data.shape)  # Add small Gaussian noise for augmentation
-        
-    H = H.reshape(16, -1, 131072)
-    Utheta = Utheta.reshape(16, -1, 131072)
-    Uphi = Uphi.reshape(16, -1, 131072)
-    sensors_data = sensors_data.reshape(16, -1, 10)
-
-    permutation = np.random.permutation(sensors_data.shape[0])
-    sensors_data = sensors_data[permutation]
-    H = H[permutation]
-    Utheta = Utheta[permutation]
-    Uphi = Uphi[permutation]
-
-    print("\nSensors data shape:\t", sensors_data.shape)
-    print("H shape:\t\t", H.shape)  
-    print("Utheta shape:\t\t", Utheta.shape)
-    print("Uphi shape:\t\t", Uphi.shape)
-
-    return sensors_data, H, Utheta, Uphi
-
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib.patheffects as pe
-from matplotlib.lines import Line2D
-from matplotlib.patches import Patch
-from matplotlib.text import Text
-from types import SimpleNamespace
-
-
 # ------------------------------------------------------------------
-# Style
-# ------------------------------------------------------------------
-PAPER_RC = {
-    "font.family": "serif",
-    "font.serif": ["Times New Roman", "DejaVu Serif"],
-    "mathtext.fontset": "stix",
-    "axes.linewidth": 0.9,
-    "xtick.direction": "out",
-    "xtick.major.width": 0.9,
-    "xtick.major.size": 4,
-    "pdf.fonttype": 42,
-    "ps.fonttype": 42,
-}
-
-C_DATA = "#1f4e79"      # valid measurements
-C_NAN = "#c8553d"       # missing data
-C_BAND = "#f2f4f7"      # alternating row band
-C_MARK = "#c8553d"      # map sensor markers
-
-
-
-# ------------------------------------------------------------------
-# Simple sensor availability plot
+# Sensor availability plots
 # ------------------------------------------------------------------
 def plot_data_availability(sensor_data, title_prefix, sensor_labels=None):
     np.random.seed(42)  # For reproducibility
@@ -399,10 +392,6 @@ def plot_data_availability(sensor_data, title_prefix, sensor_labels=None):
     plt.show()
     return fig, ax
 
-
-# ------------------------------------------------------------------
-# Sensor availability plot
-# ------------------------------------------------------------------
 def plot_station_availability(
     wllist,
     ntimes,
@@ -554,9 +543,8 @@ def plot_station_availability(
 
     return fig, ax, coverage_pct_by_name
 
-
 # ------------------------------------------------------------------
-# Map labels (no overlaps)
+# Sensor map labels
 # ------------------------------------------------------------------
 def _place_map_labels(ax, stations, fontsize=20, offset=(9, 6), pad=3.0, max_iter=500):
     """Sensor names on the map, pushed apart vertically; leader line only if moved."""
@@ -636,9 +624,8 @@ def _place_map_labels(ax, stations, fontsize=20, offset=(9, 6), pad=3.0, max_ite
         a.xyann = (o[0] / k, o[1] / k)
         a.arrow_patch.set_visible(bool(np.hypot(*(o - o_init)) > 6 * k))
 
-
 # ------------------------------------------------------------------
-# Combined figure
+# Combined overview figure
 # ------------------------------------------------------------------
 def plot_overview_and_availability(
     wllist,
@@ -717,3 +704,4 @@ def plot_overview_and_availability(
         plt.show()
 
     return fig, axs, cov
+
