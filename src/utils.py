@@ -271,6 +271,56 @@ def plot_training_curves(train_errors, valid_errors):
     plt.grid()
     plt.show()
 
+def evaluate_reconstruction_metrics(reconstructions, ground_truths):
+    """Compute MSE, RMSE, MAE, and NMAE for each split and reconstructed field.
+
+    Parameters
+    ----------
+    reconstructions : Mapping
+        Mapping of split name to a mapping of field name to predictions.
+    ground_truths : Mapping
+        Mapping with the same split and field names as ``reconstructions``.
+
+    Returns
+    -------
+    dict
+        ``metrics[split][field]`` contains ``mse``, ``rmse``, ``mae``, and
+        ``nmae`` as Python floats. Inputs may be NumPy arrays or torch tensors.
+    """
+    if set(reconstructions) != set(ground_truths):
+        raise ValueError("reconstructions and ground_truths must contain the same splits")
+
+    metrics = {}
+    for split, split_reconstructions in reconstructions.items():
+        split_ground_truths = ground_truths[split]
+        if set(split_reconstructions) != set(split_ground_truths):
+            raise ValueError(
+                f"{split}: reconstructions and ground_truths must contain the same fields"
+            )
+
+        split_metrics = {}
+        for field, prediction in split_reconstructions.items():
+            predicted_tensor = torch.as_tensor(prediction, dtype=torch.float64)
+            truth_tensor = torch.as_tensor(split_ground_truths[field], dtype=torch.float64)
+            if predicted_tensor.shape != truth_tensor.shape:
+                raise ValueError(
+                    f"{split}/{field}: prediction shape {tuple(predicted_tensor.shape)} "
+                    f"does not match ground-truth shape {tuple(truth_tensor.shape)}"
+                )
+
+            error = predicted_tensor - truth_tensor
+            mse_value = torch.mean(error ** 2)
+            denominator = torch.amax(truth_tensor) - torch.amin(truth_tensor)
+            split_metrics[field] = {
+                "mse": mse_value.item(),
+                "rmse": torch.sqrt(mse_value).item(),
+                "mae": torch.mean(torch.abs(error)).item(),
+                "nmae": torch.mean(torch.abs(error) / denominator).item(),
+            }
+        metrics[split] = split_metrics
+    del reconstructions, ground_truths
+    return metrics
+
 def evaluate_model(
     evaluate,
     mshred,

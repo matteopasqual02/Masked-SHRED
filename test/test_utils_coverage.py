@@ -22,6 +22,7 @@ from src.utils import (
     generate_channels,
     plot_training_curves,
     evaluate_model,
+    evaluate_reconstruction_metrics,
 )
 
 
@@ -395,6 +396,32 @@ class TestEdgeCases:
         measurements = np.random.randn(3, 4, 5, 6)  # 4D array - invalid
         with pytest.raises(ValueError, match="Input measurements must be 2D or 3D array"):
             generate_channels(measurements)
+
+    def test_evaluate_reconstruction_metrics(self):
+        """Compute all reconstruction metrics for every split and field."""
+        reconstruction = {
+            "train": {"height": np.array([[1.0, 3.0]])},
+            "test": {"height": torch.tensor([[2.0, 4.0]])},
+        }
+        ground_truth = {
+            "train": {"height": np.array([[0.0, 4.0]])},
+            "test": {"height": torch.tensor([[1.0, 5.0]])},
+        }
+
+        result = evaluate_reconstruction_metrics(reconstruction, ground_truth)
+
+        assert result["train"]["height"]["mse"] == pytest.approx(1.0)
+        assert result["train"]["height"]["rmse"] == pytest.approx(1.0)
+        assert result["train"]["height"]["mae"] == pytest.approx(1.0)
+        assert result["train"]["height"]["nmae"] == pytest.approx(0.25)
+        assert result["test"]["height"]["mse"] == pytest.approx(1.0)
+
+    def test_evaluate_reconstruction_metrics_rejects_mismatched_shapes(self):
+        with pytest.raises(ValueError, match="prediction shape"):
+            evaluate_reconstruction_metrics(
+                {"test": {"height": np.zeros((2, 1))}},
+                {"test": {"height": np.zeros((2, 2))}},
+            )
 
 
 # Run with: PYTHONPATH=. conda run -n mask-shred pytest test/test_utils_coverage.py -v
