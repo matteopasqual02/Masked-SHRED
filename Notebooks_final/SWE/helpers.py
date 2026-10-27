@@ -39,6 +39,11 @@ C_NAN = "#c8553d"       # missing data
 C_BAND = "#f2f4f7"      # alternating row band
 C_MARK = "#c8553d"      # map sensor markers
 
+SWE_MODEL_NAMES = (
+    "T0A", "T0B", "T1A", "T1B", "T1C", "T2A", "T2B",
+    "T3A", "T3B", "T3C", "T3D", "T3E", "T3F", "T3G",
+)
+
 
 # ------------------------------------------------------------------
 # Data preprocessing
@@ -84,7 +89,8 @@ def eval_all(
     H,
     Utheta,
     Uphi,
-    output_path="reconstruction_metrics.json",
+    model_name=None,
+    output_path="reconstruction_metrics_all_models.json",
 ):
     """Evaluate reconstructions and save the metrics to a JSON file."""
     engine = SHREDEngine(manager, mshred)
@@ -159,8 +165,35 @@ def eval_all(
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    results_to_save = {name: None for name in SWE_MODEL_NAMES}
+    if output_path.exists():
+        with output_path.open("r", encoding="utf-8") as json_file:
+            existing_results = json.load(json_file)
+        if isinstance(existing_results, dict):
+            if any(name in existing_results for name in SWE_MODEL_NAMES):
+                results_to_save.update({
+                    name: existing_results.get(name)
+                    for name in SWE_MODEL_NAMES
+                })
+            elif set(existing_results) == {"train", "val", "test"}:
+                results_to_save[SWE_MODEL_NAMES[0]] = existing_results
+            else:
+                results_to_save.update(existing_results)
+
+    if model_name is None:
+        model_name = next(
+            (name for name in SWE_MODEL_NAMES if results_to_save[name] is None),
+            None,
+        )
+        if model_name is None:
+            raise ValueError(
+                "All SWE model results are already populated; pass model_name "
+                "to update a specific model"
+            )
+    results_to_save[model_name] = reconstruction_metrics
+
     with output_path.open("w", encoding="utf-8") as json_file:
-        json.dump(reconstruction_metrics, json_file, indent=2)
+        json.dump(results_to_save, json_file, indent=2)
     print(f"\nSaved reconstruction metrics: {output_path}")
 
     return reconstruction_metrics
