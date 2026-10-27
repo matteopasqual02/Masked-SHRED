@@ -416,6 +416,14 @@ class TestEdgeCases:
         assert result["train"]["height"]["nmae"] == pytest.approx(0.25)
         assert result["test"]["height"]["mse"] == pytest.approx(1.0)
 
+    def test_evaluate_reconstruction_metrics_normalizes_mse_by_field_points(self):
+        result = evaluate_reconstruction_metrics(
+            {"test": {"height": np.array([[1.0, 2.0, 4.0]])}},
+            {"test": {"height": np.zeros((1, 3))}},
+        )
+
+        assert result["test"]["height"]["mse"] == pytest.approx(7.0)
+
     def test_evaluate_reconstruction_metrics_rejects_mismatched_shapes(self):
         with pytest.raises(ValueError, match="prediction shape"):
             evaluate_reconstruction_metrics(

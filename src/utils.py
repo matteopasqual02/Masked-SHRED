@@ -309,7 +309,7 @@ def evaluate_reconstruction_metrics(reconstructions, ground_truths):
                 )
 
             error = predicted_tensor - truth_tensor
-            mse_value = (error ** 2).sum(axis=-1).mean() / truth_tensor.shape[-1]
+            mse_value = error.pow(2).mean(dim=-1).mean() / truth_tensor.shape[-1]
             mre_value = (
                 (truth_tensor - predicted_tensor).pow(2).sum(axis=-1).sqrt()
                 / truth_tensor.pow(2).sum(axis=-1).sqrt()
