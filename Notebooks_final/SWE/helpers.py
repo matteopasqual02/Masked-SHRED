@@ -13,6 +13,9 @@ from matplotlib.ticker import MaxNLocator
 from pathlib import Path
 from types import SimpleNamespace
 
+from src.engine import SHREDEngine
+from src.utils import evaluate_reconstruction_metrics
+
 
 # ------------------------------------------------------------------
 # Shared style and plotting constants
@@ -74,6 +77,39 @@ def ROM_data_preprocessing(sensors_data, H,  Utheta, Uphi, augmentation_factor=2
     print("Uphi shape:\t\t", Uphi.shape)
 
     return sensors_data, H, Utheta, Uphi
+
+
+def eval_all(manager, mshred, train_dataset, val_dataset, test_dataset, H, Utheta, Uphi):
+    """Evaluate train, validation, and test reconstructions for one model."""
+    engine = SHREDEngine(manager, mshred)
+    nheight = H.shape[-1]
+    nvelocity = Utheta.shape[-1]
+    reconstruction_metrics = evaluate_reconstruction_metrics(
+        reconstructions={
+            "train": engine.sensor_to_reconstruction_dataset(train_dataset),
+            "val": engine.sensor_to_reconstruction_dataset(val_dataset),
+            "test": engine.sensor_to_reconstruction_dataset(test_dataset),
+        },
+        ground_truths={
+            "train": {
+                "Surface elevation": H[0:12].reshape(-1, nheight),
+                "Velocity theta": Utheta[0:12].reshape(-1, nvelocity),
+                "Velocity phi": Uphi[0:12].reshape(-1, nvelocity),
+            },
+            "val": {
+                "Surface elevation": H[12:14].reshape(-1, nheight),
+                "Velocity theta": Utheta[12:14].reshape(-1, nvelocity),
+                "Velocity phi": Uphi[12:14].reshape(-1, nvelocity),
+            },
+            "test": {
+                "Surface elevation": H[14:16].reshape(-1, nheight),
+                "Velocity theta": Utheta[14:16].reshape(-1, nvelocity),
+                "Velocity phi": Uphi[14:16].reshape(-1, nvelocity),
+            },
+        },
+    )
+    print("Reconstruction metrics:\n", reconstruction_metrics)
+
 
 # ------------------------------------------------------------------
 # Sphere rendering helpers
@@ -704,4 +740,3 @@ def plot_overview_and_availability(
         plt.show()
 
     return fig, axs, cov
-
