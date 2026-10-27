@@ -1,5 +1,6 @@
 """Plotting and preprocessing helpers for the SWE notebooks."""
 
+import json
 import matplotlib as mpl
 import matplotlib.patheffects as pe
 import matplotlib.pyplot as plt
@@ -45,11 +46,6 @@ C_MARK = "#c8553d"      # map sensor markers
 def ROM_data_preprocessing(sensors_data, H,  Utheta, Uphi, augmentation_factor=2):
     np.random.seed(42)  # For reproducibility
 
-    print("Sensors data shape:\t", sensors_data.shape)
-    print("H shape:\t\t", H.shape)
-    print("Utheta shape:\t\t", Utheta.shape)
-    print("Uphi shape:\t\t", Uphi.shape)
-
     for _ in range(augmentation_factor - 1):
         H = np.vstack((H, H))  # Duplicate the data
         H = H + np.random.normal(0, 0.001, H.shape)  # Add small Gaussian noise for augmentation
@@ -79,8 +75,18 @@ def ROM_data_preprocessing(sensors_data, H,  Utheta, Uphi, augmentation_factor=2
     return sensors_data, H, Utheta, Uphi
 
 
-def eval_all(manager, mshred, train_dataset, val_dataset, test_dataset, H, Utheta, Uphi):
-    """Evaluate train, validation, and test reconstructions for one model."""
+def eval_all(
+    manager,
+    mshred,
+    train_dataset,
+    val_dataset,
+    test_dataset,
+    H,
+    Utheta,
+    Uphi,
+    output_path="reconstruction_metrics.json",
+):
+    """Evaluate reconstructions and save the metrics to a JSON file."""
     engine = SHREDEngine(manager, mshred)
     nheight = H.shape[-1]
     nvelocity = Utheta.shape[-1]
@@ -108,7 +114,56 @@ def eval_all(manager, mshred, train_dataset, val_dataset, test_dataset, H, Uthet
             },
         },
     )
-    print("Reconstruction metrics:\n", reconstruction_metrics)
+
+    metric_names = ("mse", "mre", "mae", "nmae")
+    unified_metric_names = ("mse", "mre", "nmae")
+    split_names = ("train", "val", "test")
+
+    field_groups = {
+        "Unify velocity field": ("Velocity theta", "Velocity phi"),
+        "Unify all": ("Surface elevation", "Velocity theta", "Velocity phi"),
+    }
+    for unified_name, fields in field_groups.items():
+        for split in split_names:
+            reconstruction_metrics[split][unified_name] = {
+                metric: float(np.mean([
+                    reconstruction_metrics[split][field][metric]
+                    for field in fields
+                ]))
+                for metric in unified_metric_names
+            }
+
+    for field in ("Surface elevation", "Velocity theta", "Velocity phi"):
+        print(f"\n{field}")
+        header = f"{'split':<8}" + "".join(f"{metric.upper():>16}" for metric in metric_names)
+        print(header)
+        print("-" * len(header))
+        for split in split_names:
+            values = reconstruction_metrics[split][field]
+            row = f"{split:<8}" + "".join(f"{values[metric]:>16.6f}" for metric in metric_names)
+            print(row)
+
+    for unified_name in field_groups:
+        print(f"\n{unified_name}")
+        header = f"{'split':<8}" + "".join(
+            f"{metric.upper():>16}" for metric in unified_metric_names
+        )
+        print(header)
+        print("-" * len(header))
+        for split in split_names:
+            values = reconstruction_metrics[split][unified_name]
+            row = f"{split:<8}" + "".join(
+                f"{values[metric]:>16.6f}" for metric in unified_metric_names
+            )
+            print(row)
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8") as json_file:
+        json.dump(reconstruction_metrics, json_file, indent=2)
+    print(f"\nSaved reconstruction metrics: {output_path}")
+
+    return reconstruction_metrics
 
 
 # ------------------------------------------------------------------

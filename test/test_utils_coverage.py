@@ -411,7 +411,7 @@ class TestEdgeCases:
         result = evaluate_reconstruction_metrics(reconstruction, ground_truth)
 
         assert result["train"]["height"]["mse"] == pytest.approx(1.0)
-        assert result["train"]["height"]["rmse"] == pytest.approx(1.0)
+        assert result["train"]["height"]["mre"] == pytest.approx(np.sqrt(2) / 4)
         assert result["train"]["height"]["mae"] == pytest.approx(1.0)
         assert result["train"]["height"]["nmae"] == pytest.approx(0.25)
         assert result["test"]["height"]["mse"] == pytest.approx(1.0)

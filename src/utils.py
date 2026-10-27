@@ -272,7 +272,7 @@ def plot_training_curves(train_errors, valid_errors):
     plt.show()
 
 def evaluate_reconstruction_metrics(reconstructions, ground_truths):
-    """Compute MSE, RMSE, MAE, and NMAE for each split and reconstructed field.
+    """Compute MSE, MRE, MAE, and NMAE for each split and reconstructed field.
 
     Parameters
     ----------
@@ -284,7 +284,7 @@ def evaluate_reconstruction_metrics(reconstructions, ground_truths):
     Returns
     -------
     dict
-        ``metrics[split][field]`` contains ``mse``, ``rmse``, ``mae``, and
+        ``metrics[split][field]`` contains ``mse``, ``mre``, ``mae``, and
         ``nmae`` as Python floats. Inputs may be NumPy arrays or torch tensors.
     """
     if set(reconstructions) != set(ground_truths):
@@ -309,11 +309,15 @@ def evaluate_reconstruction_metrics(reconstructions, ground_truths):
                 )
 
             error = predicted_tensor - truth_tensor
-            mse_value = torch.mean(error ** 2)
+            mse_value = (error ** 2).sum(axis=-1).mean() / truth_tensor.shape[-1]
+            mre_value = (
+                (truth_tensor - predicted_tensor).pow(2).sum(axis=-1).sqrt()
+                / truth_tensor.pow(2).sum(axis=-1).sqrt()
+            ).mean()
             denominator = torch.amax(truth_tensor) - torch.amin(truth_tensor)
             split_metrics[field] = {
                 "mse": mse_value.item(),
-                "rmse": torch.sqrt(mse_value).item(),
+                "mre": mre_value.item(),
                 "mae": torch.mean(torch.abs(error)).item(),
                 "nmae": torch.mean(torch.abs(error) / denominator).item(),
             }
