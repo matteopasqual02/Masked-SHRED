@@ -271,7 +271,7 @@ def plot_training_curves(train_errors, valid_errors):
     plt.grid()
     plt.show()
 
-def evaluate_reconstruction_metrics(reconstructions, ground_truths):
+def evaluate_reconstruction_metrics(reconstructions, ground_truths, normalize_by_dim=False):
     """Compute MSE, MRE, MAE, and NMAE for each split and reconstructed field.
 
     Parameters
@@ -309,7 +309,10 @@ def evaluate_reconstruction_metrics(reconstructions, ground_truths):
                 )
 
             error = predicted_tensor - truth_tensor
-            mse_value = error.pow(2).mean(dim=-1).mean() / truth_tensor.shape[-1]
+            if normalize_by_dim:
+                mse_value = error.pow(2).mean(dim=-1).mean() / truth_tensor.shape[-1]
+            else:
+                mse_value = error.pow(2).mean(dim=-1).mean()
             mre_value = (
                 (truth_tensor - predicted_tensor).pow(2).sum(axis=-1).sqrt()
                 / truth_tensor.pow(2).sum(axis=-1).sqrt()
