@@ -280,7 +280,10 @@ def eval_all(
         for split, dataset in split_datasets.items()
     }
     ground_truths = {
-        split: {field: values[indices] for field, values in fields.items()}
+        split: {
+            field: values[indices].reshape(-1, values.shape[-1])
+            for field, values in fields.items()
+        }
         for split, indices in split_indices.items()
     }
     metrics = evaluate_reconstruction_metrics(reconstructions, ground_truths)
@@ -295,13 +298,13 @@ def eval_all(
                     ]
                 )
             )
-            for metric in ("mse", "mre", "mae", "nmae")
+            for metric in ("mse", "mae", "nmae")
         }
         metrics[split]["Unify all"] = {
             metric: float(
                 np.mean([field_metrics[field][metric] for field in fields])
             )
-            for metric in ("mse", "mre", "mae", "nmae")
+            for metric in ("mse", "mae", "nmae")
         }
 
     records = {split: dict(values) for split, values in metrics.items()}
