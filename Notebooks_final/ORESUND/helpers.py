@@ -142,6 +142,80 @@ def extract_water_level_measurements(stations, ds_time, obs_fldr, window="25min"
     return measurements
 
 
+def eval_all_lagged(
+    manager,
+    mshred,
+    train_dataset,
+    val_dataset,
+    test_dataset,
+    H,
+    U,
+    V,
+    model_name=None,
+    output_path="reconstruction_metrics_all_models.json",
+):
+    """Evaluate one HYDRO model on the manager's actual data splits."""
+    engine = SHREDEngine(manager, mshred)
+    split_datasets = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
+    fields = {
+        "Surface elevation": H,
+        "U velocity": U,
+        "V velocity": V,
+    }
+    split_indices = {
+        "train": manager.train_indices,
+        "val": manager.val_indices,
+        "test": manager.test_indices,
+    }
+    reconstructions = {
+        split: engine.sensor_to_reconstruction_dataset_lagged(dataset)
+        for split, dataset in split_datasets.items()
+    }
+    ground_truths = {
+        split: {
+            field: values[indices].reshape(-1, values.shape[-1])
+            for field, values in fields.items()
+        }
+        for split, indices in split_indices.items()
+    }
+    metrics = evaluate_reconstruction_metrics(reconstructions, ground_truths)
+    for split in metrics:
+        field_metrics = metrics[split]
+        metrics[split]["Unify velocity field"] = {
+            metric: float(
+                np.mean(
+                    [
+                        field_metrics["U velocity"][metric],
+                        field_metrics["V velocity"][metric],
+                    ]
+                )
+            )
+            for metric in ("mse", "mae", "nmae")
+        }
+        metrics[split]["Unify all"] = {
+            metric: float(
+                np.mean([field_metrics[field][metric] for field in fields])
+            )
+            for metric in ("mse", "mae", "nmae")
+        }
+
+    records = {split: dict(values) for split, values in metrics.items()}
+    if model_name is not None:
+        records["model"] = model_name
+    output_path = Path(output_path)
+    if output_path.exists():
+        with output_path.open("r", encoding="utf-8") as json_file:
+            all_metrics = json.load(json_file)
+    else:
+        all_metrics = {}
+    if model_name is not None:
+        all_metrics[model_name] = metrics
+        with output_path.open("w", encoding="utf-8") as json_file:
+            json.dump(all_metrics, json_file, indent=2)
+    return records
+
+
+
 def eval_all(
     manager,
     mshred,
