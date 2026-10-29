@@ -1,0 +1,2 @@
+model,type,train-nmae,valid-nmae,test-nmae
+(mSHRED): TR+cnn,(T.4.A): CSSHRED,0.017618286663473707,0.019186926789585026,0.01801043524377078

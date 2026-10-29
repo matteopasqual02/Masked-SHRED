@@ -37,8 +37,17 @@ def eval_all(
     ground_truth,
     model_name=None,
     output_path="reconstruction_metrics_all_models.json",
+    train_time_minutes=None,
 ):
     """Evaluate an SST model on the manager's actual data splits."""
+    import json
+    import time
+    from pathlib import Path
+
+    from src.engine import SHREDEngine
+    from src.utils import evaluate_reconstruction_metrics
+
+    inference_start = time.perf_counter()
     engine = SHREDEngine(manager, mshred)
     split_datasets = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
     split_indices = {
@@ -62,14 +71,24 @@ def eval_all(
         }
 
     metrics = evaluate_reconstruction_metrics(reconstructions, ground_truths)
+    inference_time_seconds = time.perf_counter() - inference_start
+    metrics["_timing"] = {
+        "train_minutes": train_time_minutes,
+        "inference_seconds": inference_time_seconds,
+    }
 
     records = {split: dict(values) for split, values in metrics.items()}
     if model_name is not None:
         records["model"] = model_name
     output_path = Path(output_path)
     if output_path.exists():
-        with output_path.open("r", encoding="utf-8") as json_file:
-            all_metrics = json.load(json_file)
+        try:
+            with output_path.open("r", encoding="utf-8") as json_file:
+                all_metrics = json.load(json_file)
+        except json.JSONDecodeError:
+            if output_path.stat().st_size != 0:
+                raise
+            all_metrics = {}
     else:
         all_metrics = {}
     if model_name is not None:
