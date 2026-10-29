@@ -6,7 +6,7 @@ from pytest import approx
 
 sys.path.insert(0, str(Path(__file__).parents[1]))
 
-from Images.scripts.reduce_image_dpi import reduce_image_dpi
+from Images_final.scripts.reduce_image_dpi import reduce_image_dpi
 
 
 def test_reduce_image_dpi_halves_dimensions_and_preserves_metadata(
