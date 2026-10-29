@@ -260,6 +260,58 @@ def error_mshred(test_reconstruction, ds, items=None):
 
     return mse_matrix, mre_matrix
 
+def error_mshred_2(test_reconstruction, ds, items=None):
+
+    if items is None:
+        items = ["Surface elevation", "U velocity", "V velocity"]
+    elif isinstance(items, str):
+        items = [items]
+
+    ntimes = test_reconstruction[items[0]].shape[0]
+    n_items = len(items)
+
+    rmse_matrix = np.zeros((ntimes, n_items))
+    nmae_matrix = np.zeros((ntimes, n_items))
+
+    times_test = ds.time[-ntimes:]
+
+    eps = 1e-12
+
+    for j, item in enumerate(items):
+
+        target = ds[item].sel(time=times_test).values
+
+        # Rebuild full field with NaNs
+        full = np.full(
+            (ntimes, ds[item].values.shape[1]),
+            np.nan
+        )
+
+        valid_cols = ~np.isnan(ds[item].values).any(axis=0)
+        full[:, valid_cols] = test_reconstruction[item]
+
+        pred = full
+
+        # Normalize NMAE using the ground-truth range
+        denominator = np.nanmax(target) - np.nanmin(target)
+        denominator = max(denominator, eps)
+
+        for t in range(ntimes):
+
+            error = target[t] - pred[t]
+
+            # RMSE at timestep t
+            rmse_matrix[t, j] = np.sqrt(
+                np.nanmean(error**2)
+            )
+
+            # NMAE at timestep t
+            nmae_matrix[t, j] = np.nanmean(
+                np.abs(error) / denominator
+            )
+
+    return rmse_matrix, nmae_matrix
+
 def align_ds(test_idx, ds, permuted_indices, lenmonths, geom):
     # Build test indices in original (chronological) ds based on the month permutation used for training
     perm_time_idx = np.concatenate([np.arange(m * lenmonths, (m + 1) * lenmonths) for m in permuted_indices])
