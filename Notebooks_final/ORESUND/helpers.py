@@ -284,6 +284,8 @@ def eval_all(
         all_metrics[model_name] = metrics
         with output_path.open("w", encoding="utf-8") as json_file:
             json.dump(all_metrics, json_file, indent=2)
+
+    del engine, reconstructions, ground_truths, metrics, split_datasets, split_indices, manager, mshred, train_dataset, val_dataset, test_dataset, H, U, V 
     return records
 
 def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, items=None, cmaps=None, title_suffix=""):
