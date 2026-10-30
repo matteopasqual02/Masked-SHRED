@@ -8,7 +8,7 @@ Real-world sensing systems are inherently imperfect: sensors fail, disconnect in
  
 We further introduce a **multi-step decoding training objective**: by decoding at intermediate timesteps and applying a weighted reconstruction loss, the model receives auxiliary supervision throughout the temporal axis, encouraging smoother and more coherent latent trajectories.
 
-![Figure 1](Images/fig1.svg)
+![Figure 1](Images_final/fig1.svg)
  
 Across synthetic benchmarks and a real-world hydrodynamic dataset, we show that:
  
