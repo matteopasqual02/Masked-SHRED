@@ -95,19 +95,19 @@
     "train": {
       "Surface elevation": {
         "mse": 0.020138974089053845,
-        "mre": Infinity,
+        "mre": "Infinity",
         "mae": 0.09926490232773662,
         "nmae": 0.009781864398941766
       },
       "U velocity": {
         "mse": 0.002243648929396698,
-        "mre": Infinity,
+        "mre": "Infinity",
         "mae": 0.03187494730736389,
         "nmae": 0.00960866659377022
       },
       "V velocity": {
         "mse": 0.002256583302358309,
-        "mre": Infinity,
+        "mre": "Infinity",
         "mae": 0.03225493474582593,
         "nmae": 0.007545686287493431
       },
