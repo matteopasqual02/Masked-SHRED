@@ -1,5 +1,6 @@
 """Data loading, evaluation, and plotting helpers for the HYDRO notebooks."""
 
+import gc
 import glob
 import json
 import matplotlib as mpl
@@ -20,7 +21,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from src.engine import SHREDEngine
-from src.utils import evaluate_reconstruction_metrics
 
 
 _OBSERVATIONS_DIR = Path("datasets/observations")
@@ -79,7 +79,7 @@ def extract_water_level_measurements(stations, ds_time, obs_fldr=_OBSERVATIONS_D
     in ``window`` before each simulation timestamp.
     """
     obs_fldr = Path(obs_fldr)
-    simulation_times = pd.DatetimeIndex(ds_time.values)
+    simulation_times = pd.DatetimeIndex(getattr(ds_time, "values", ds_time))
     measurements = np.full((len(simulation_times), len(stations)), np.nan)
     window_delta = pd.Timedelta(window)
     missing_files = []
@@ -116,6 +116,54 @@ def extract_water_level_measurements(stations, ds_time, obs_fldr=_OBSERVATIONS_D
     return measurements
 
 
+def load_hydro_fields(dfs, items=("Surface elevation", "U velocity", "V velocity")):
+    """Read dfsu items one field at a time and drop spatially invalid elements.
+
+    The NaN mask is taken from the first item. Each MikeIO dataset is released
+    before the next item is read so the full (H, U, V) cube is never resident
+    twice.
+    """
+    items = list(items)
+    ds0 = dfs.read(items=items[0], dtype=np.float32)
+    time = ds0.time
+    values0 = np.asarray(ds0[items[0]].values)
+    del ds0
+    valid = ~np.isnan(values0).any(axis=0)
+    element_index = np.flatnonzero(valid)
+    fields = {items[0]: np.ascontiguousarray(values0[:, valid], dtype=np.float32)}
+    del values0
+    gc.collect()
+
+    for item in items[1:]:
+        ds = dfs.read(items=item, elements=element_index, dtype=np.float32)
+        fields[item] = np.ascontiguousarray(ds[item].values, dtype=np.float32)
+        del ds
+        gc.collect()
+    return time, fields, valid
+
+
+def reshape_and_permute_months(*arrays, steps_per_month=30 * 24 * 2, seed=42):
+    """Truncate to full months, reshape ``(nmonths, steps, features)``, permute months.
+
+    Arrays are rewritten one at a time so only one extra field-sized copy exists
+    during the permutation.
+    """
+    ntimes = arrays[0].shape[0]
+    nmonths = ntimes // steps_per_month
+    nkeep = nmonths * steps_per_month
+    np.random.seed(seed)
+    perm = np.random.permutation(nmonths)
+
+    out = []
+    for array in arrays:
+        reshaped = array[:nkeep].reshape(nmonths, steps_per_month, -1)
+        permuted = np.ascontiguousarray(reshaped[perm])
+        del reshaped
+        out.append(permuted)
+    gc.collect()
+    return nmonths, nkeep, perm, tuple(out)
+
+
 def plot_shred_reconstruction(
     test_reconstruction, ds, geom, plot_time=None, items=None, cmaps=None, title_suffix=""
 ):
@@ -138,11 +186,15 @@ def plot_shred_reconstruction(
 
     times_test = ds.time[-test_reconstruction[items[0]].shape[0]:]
     reconstructions = {}
+    valid_columns = None
     for item in items:
-        valid_columns = ~np.isnan(ds[item].values).any(axis=0)
-        full = np.full((len(times_test), ds[item].values.shape[1]), np.nan)
+        item_values = ds[item].values
+        if valid_columns is None:
+            valid_columns = ~np.isnan(item_values).any(axis=0)
+        full = np.full((len(times_test), item_values.shape[1]), np.nan)
         full[:, valid_columns] = test_reconstruction[item]
         reconstructions[item] = full
+        del item_values
 
     ds_shred = mikeio.Dataset(
         [
@@ -250,63 +302,133 @@ def ROM_data_preprocessing(sensors_data, H,  Utheta, Uphi, augmentation_factor=2
     return sensors_data, H, Utheta, Uphi
 
 
-def eval_all(
-    manager,
-    mshred,
-    train_dataset,
-    val_dataset,
-    test_dataset,
-    H,
-    U,
-    V,
-    model_name=None,
-    output_path="reconstruction_metrics_all_models.json",
-):
-    """Evaluate one HYDRO model on the manager's actual data splits."""
-    engine = SHREDEngine(manager, mshred)
-    split_datasets = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
-    fields = {
-        "Surface elevation": H,
-        "U velocity": U,
-        "V velocity": V,
-    }
-    split_indices = {
-        "train": manager.train_indices,
-        "val": manager.val_indices,
-        "test": manager.test_indices,
-    }
-    reconstructions = {
-        split: engine.sensor_to_reconstruction_dataset(dataset)
-        for split, dataset in split_datasets.items()
-    }
-    ground_truths = {
-        split: {
-            field: values[indices].reshape(-1, values.shape[-1])
-            for field, values in fields.items()
-        }
-        for split, indices in split_indices.items()
-    }
-    metrics = evaluate_reconstruction_metrics(reconstructions, ground_truths)
-    for split in metrics:
-        field_metrics = metrics[split]
-        metrics[split]["Unify velocity field"] = {
-            metric: float(
-                np.mean(
-                    [
-                        field_metrics["U velocity"][metric],
-                        field_metrics["V velocity"][metric],
-                    ]
-                )
-            )
-            for metric in ("mse", "mae", "nmae")
-        }
-        metrics[split]["Unify all"] = {
-            metric: float(
-                np.mean([field_metrics[field][metric] for field in fields])
-            )
-            for metric in ("mse", "mae", "nmae")
-        }
+def _contiguous_index(indices):
+    """Use a slice (view) when split indices are a contiguous range."""
+    indices = np.asarray(indices)
+    if indices.size == 0:
+        return indices
+    start = int(indices[0])
+    stop = int(indices[-1]) + 1
+    if indices.shape == (stop - start,) and np.all(indices == np.arange(start, stop)):
+        return slice(start, stop)
+    return indices
 
+
+def _split_truth(values, indices):
+    selected = values[_contiguous_index(indices)]
+    return np.reshape(selected, (-1, values.shape[-1]))
+
+
+def _field_metrics(prediction, truth, chunk_size=256):
+    """MSE / MRE / MAE / NMAE without promoting the full fields to float64."""
+    prediction = np.asarray(prediction)
+    truth = np.asarray(truth)
+    n_times, n_space = prediction.shape
+    mse_sum = 0.0
+    mae_sum = 0.0
+    mre_sum = 0.0
+    tmin = np.inf
+    tmax = -np.inf
+    for start in range(0, n_times, chunk_size):
+        pred_chunk = prediction[start:start + chunk_size].astype(np.float64, copy=False)
+        truth_chunk = truth[start:start + chunk_size].astype(np.float64, copy=False)
+        error = pred_chunk - truth_chunk
+        mse_sum += np.mean(error * error, axis=-1).sum()
+        mae_sum += np.abs(error).sum()
+        mre_sum += (
+            np.sqrt(np.sum(error * error, axis=-1))
+            / np.sqrt(np.sum(truth_chunk * truth_chunk, axis=-1))
+        ).sum()
+        tmin = min(tmin, float(truth_chunk.min()))
+        tmax = max(tmax, float(truth_chunk.max()))
+        del pred_chunk, truth_chunk, error
+    mae = mae_sum / (n_times * n_space)
+    return {
+        "mse": float(mse_sum / n_times),
+        "mre": float(mre_sum / n_times),
+        "mae": float(mae),
+        "nmae": float(mae / (tmax - tmin)),
+    }
+
+
+def _predict_latent(engine, dataset, lagged=False, batch_size=128):
+    """Run the model in batches and inverse-scale only the compact latent state."""
+    import torch
+
+    device = engine._model_device()
+    model = engine.model
+    x = dataset.X
+    mask = dataset.M if hasattr(dataset, "M") else None
+    chunks = []
+    model.eval()
+    with torch.no_grad():
+        for start in range(0, x.shape[0], batch_size):
+            xb = x[start:start + batch_size].to(device)
+            mb = mask[start:start + batch_size].to(device) if mask is not None else None
+            output = model(xb, mb) if mb is not None else model(xb)
+            if lagged:
+                if isinstance(output, (list, tuple)):
+                    output = output[-1]
+                elif torch.is_tensor(output) and output.ndim == 3:
+                    output = output[-1]
+            chunks.append(output.detach().cpu().numpy())
+            del xb, mb, output
+    latent = np.concatenate(chunks, axis=0)
+    del chunks
+    latent = engine.dm.data_scaler.inverse_transform(latent)
+    return np.asarray(latent, dtype=np.float32)
+
+
+def _decode_one_field(engine, latent, field_id, chunk_size=512):
+    """Inverse SVD / scaler for a single physical field, chunked to limit peak RAM."""
+    active_ids = getattr(engine.dm, "_active_dataset_ids", engine.dm._dataset_ids)
+    start_index = 0
+    for dataset_id in active_ids:
+        length = engine.dm._dataset_lengths[dataset_id]
+        if dataset_id != field_id:
+            start_index += length
+            continue
+        dataset = latent[:, start_index:start_index + length]
+        vt = engine.dm._Vt_registry.get(dataset_id)
+        pre_svd_scaler = engine.dm._preSVD_scaler_registry.get(dataset_id)
+        n_times = dataset.shape[0]
+        if vt is None and pre_svd_scaler is None:
+            return np.asarray(dataset, dtype=np.float32)
+        spatial = engine.dm._dataset_spatial_shape[dataset_id]
+        decoded = np.empty((n_times, spatial), dtype=np.float32)
+        for start in range(0, n_times, chunk_size):
+            stop = start + chunk_size
+            chunk = dataset[start:stop]
+            if vt is not None:
+                chunk = chunk @ vt
+            if pre_svd_scaler is not None:
+                chunk = pre_svd_scaler.inverse_transform(chunk)
+            decoded[start:stop] = np.asarray(chunk, dtype=np.float32)
+            del chunk
+        return decoded
+    raise KeyError(f"Unknown field id: {field_id}")
+
+
+def _add_unified_metrics(split_metrics, fields):
+    split_metrics["Unify velocity field"] = {
+        metric: float(
+            np.mean(
+                [
+                    split_metrics["U velocity"][metric],
+                    split_metrics["V velocity"][metric],
+                ]
+            )
+        )
+        for metric in ("mse", "mae", "nmae")
+    }
+    split_metrics["Unify all"] = {
+        metric: float(np.mean([split_metrics[field][metric] for field in fields]))
+        for metric in ("mse", "mae", "nmae")
+    }
+    return split_metrics
+
+
+def _write_metrics(metrics, model_name, output_path):
     records = {split: dict(values) for split, values in metrics.items()}
     if model_name is not None:
         records["model"] = model_name
@@ -322,6 +444,79 @@ def eval_all(
             json.dump(all_metrics, json_file, indent=2)
     return records
 
+
+def _eval_splits(
+    manager,
+    mshred,
+    train_dataset,
+    val_dataset,
+    test_dataset,
+    H,
+    U,
+    V,
+    lagged,
+    model_name=None,
+    output_path="reconstruction_metrics_all_models.json",
+):
+    """Evaluate one split and one field at a time so reconstructions are not kept."""
+    engine = SHREDEngine(manager, mshred)
+    split_datasets = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
+    fields = {
+        "Surface elevation": H,
+        "U velocity": U,
+        "V velocity": V,
+    }
+    split_indices = {
+        "train": manager.train_indices,
+        "val": manager.val_indices,
+        "test": manager.test_indices,
+    }
+    metrics = {}
+    for split, dataset in split_datasets.items():
+        latent = _predict_latent(engine, dataset, lagged=lagged)
+        split_metrics = {}
+        indices = split_indices[split]
+        for field, values in fields.items():
+            prediction = _decode_one_field(engine, latent, field)
+            truth = _split_truth(values, indices)
+            split_metrics[field] = _field_metrics(prediction, truth)
+            del prediction, truth
+            gc.collect()
+        del latent
+        gc.collect()
+        metrics[split] = _add_unified_metrics(split_metrics, fields)
+    records = _write_metrics(metrics, model_name, output_path)
+    del engine, metrics
+    gc.collect()
+    return records
+
+
+def eval_all(
+    manager,
+    mshred,
+    train_dataset,
+    val_dataset,
+    test_dataset,
+    H,
+    U,
+    V,
+    model_name=None,
+    output_path="reconstruction_metrics_all_models.json",
+):
+    """Evaluate one HYDRO model on the manager's actual data splits."""
+    return _eval_splits(
+        manager,
+        mshred,
+        train_dataset,
+        val_dataset,
+        test_dataset,
+        H,
+        U,
+        V,
+        lagged=False,
+        model_name=model_name,
+        output_path=output_path,
+    )
 
 
 def eval_all_lagged(
@@ -337,64 +532,19 @@ def eval_all_lagged(
     output_path="reconstruction_metrics_all_models.json",
 ):
     """Evaluate one HYDRO model on the manager's actual data splits."""
-    engine = SHREDEngine(manager, mshred)
-    split_datasets = {"train": train_dataset, "val": val_dataset, "test": test_dataset}
-    fields = {
-        "Surface elevation": H,
-        "U velocity": U,
-        "V velocity": V,
-    }
-    split_indices = {
-        "train": manager.train_indices,
-        "val": manager.val_indices,
-        "test": manager.test_indices,
-    }
-    reconstructions = {
-        split: engine.sensor_to_reconstruction_dataset_lagged(dataset)
-        for split, dataset in split_datasets.items()
-    }
-    ground_truths = {
-        split: {
-            field: values[indices].reshape(-1, values.shape[-1])
-            for field, values in fields.items()
-        }
-        for split, indices in split_indices.items()
-    }
-    metrics = evaluate_reconstruction_metrics(reconstructions, ground_truths)
-    for split in metrics:
-        field_metrics = metrics[split]
-        metrics[split]["Unify velocity field"] = {
-            metric: float(
-                np.mean(
-                    [
-                        field_metrics["U velocity"][metric],
-                        field_metrics["V velocity"][metric],
-                    ]
-                )
-            )
-            for metric in ("mse", "mae", "nmae")
-        }
-        metrics[split]["Unify all"] = {
-            metric: float(
-                np.mean([field_metrics[field][metric] for field in fields])
-            )
-            for metric in ("mse", "mae", "nmae")
-        }
-
-    records = {split: dict(values) for split, values in metrics.items()}
-    if model_name is not None:
-        records["model"] = model_name
-    output_path = Path(output_path)
-    if output_path.exists():
-        with output_path.open("r", encoding="utf-8") as json_file:
-            all_metrics = json.load(json_file)
-    else:
-        all_metrics = {}
-    if model_name is not None:
-        all_metrics[model_name] = metrics
-        with output_path.open("w", encoding="utf-8") as json_file:
-            json.dump(all_metrics, json_file, indent=2)
-    return records
+    return _eval_splits(
+        manager,
+        mshred,
+        train_dataset,
+        val_dataset,
+        test_dataset,
+        H,
+        U,
+        V,
+        lagged=True,
+        model_name=model_name,
+        output_path=output_path,
+    )
 
 
 
