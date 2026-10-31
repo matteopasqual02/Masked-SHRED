@@ -9,6 +9,7 @@ import numpy as np          #type: ignore
 import matplotlib.pyplot as plt  #type: ignore
 from src.engine import SHREDEngine
 from src.utils import evaluate_reconstruction_metrics
+import gc
 
 obs_fldr = "datasets/observations/" 
 df_stn = pd.read_csv(obs_fldr + "stations.csv", index_col=0)
@@ -37,6 +38,31 @@ def get_wl_point_obs():
         o = ms.PointObservation(series, x=row['Longitude'], y=row['Latitude'], name=i, quantity=q)
         wllist.append(o)
     return wllist
+
+def load_hydro_fields(dfs, items=("Surface elevation", "U velocity", "V velocity")):
+    """Read dfsu items one field at a time and drop spatially invalid elements.
+
+    The NaN mask is taken from the first item. Each MikeIO dataset is released
+    before the next item is read so the full (H, U, V) cube is never resident
+    twice.
+    """
+    items = list(items)
+    ds0 = dfs.read(items=items[0], dtype=np.float32, time = slice("2020-01-01", "2023-12-31"))
+    time = ds0.time
+    values0 = np.asarray(ds0[items[0]].values)
+    del ds0
+    valid = ~np.isnan(values0).any(axis=0)
+    element_index = np.flatnonzero(valid)
+    fields = {items[0]: np.ascontiguousarray(values0[:, valid], dtype=np.float32)}
+    del values0
+    gc.collect()
+
+    for item in items[1:]:
+        ds = dfs.read(items=item, elements=element_index, dtype=np.float32)
+        fields[item] = np.ascontiguousarray(ds[item].values, dtype=np.float32)
+        del ds
+        gc.collect()
+    return time, fields, valid
 
 def get_u_v_point_obs():
     # Get current point observations as two lists of PointObservation objects
@@ -287,6 +313,27 @@ def eval_all(
 
     del engine, reconstructions, ground_truths, metrics, split_datasets, split_indices, manager, mshred, train_dataset, val_dataset, test_dataset, H, U, V 
     return records
+
+def reshape_and_permute_months(*arrays, steps_per_month=30 * 24 * 2, seed=42):
+    """Truncate to full months, reshape ``(nmonths, steps, features)``, permute months.
+
+    Arrays are rewritten one at a time so only one extra field-sized copy exists
+    during the permutation.
+    """
+    ntimes = arrays[0].shape[0]
+    nmonths = ntimes // steps_per_month
+    nkeep = nmonths * steps_per_month
+    np.random.seed(seed)
+    perm = np.random.permutation(nmonths)
+
+    out = []
+    for array in arrays:
+        reshaped = array[:nkeep].reshape(nmonths, steps_per_month, -1)
+        permuted = np.ascontiguousarray(reshaped[perm])
+        del reshaped
+        out.append(permuted)
+    gc.collect()
+    return nmonths, nkeep, perm, tuple(out)
 
 def plot_shred_reconstruction(test_reconstruction, ds, geom, plot_time=None, items=None, cmaps=None, title_suffix=""):
     
