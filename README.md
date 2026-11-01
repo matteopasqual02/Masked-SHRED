@@ -132,13 +132,16 @@ src/
 
 ## Results
 
-Full experimental results, including synthetic benchmarks and the real-world hydrodynamic dataset, are available under [`Notebooks/`](Notebooks/).
+Full experimental results, including synthetic benchmarks and the real-world hydrodynamic dataset, are available under [`Notebooks_results/`](Notebooks_results/).
 
 The most important notebooks are listed here.
 
 - DGF (simulated data)
   - [0-DGF.ipynb](Notebooks/DGF/0-DGF.ipynb) — tutorial
-  - [1-DGF_results.ipynb](Notebooks/DGF/1-DGF_results.ipynb) — results
+  - [1-DGF_results.ipynb](Notebooks/DGF/1-DGF_results.ipynb) — results with syntetic sensor falitures
+  - [2-DGF_multi_fidelity.ipynb](Notebooks/DGF/2-DGF_multi_fidelity.ipynb) — results with not overlapping sensors
+
+
 - HYDRO (real data)
   - [1-HYDRO_baseline.ipynb](Notebooks/HYDRO/1-HYDRO_baseline.ipynb) — tutorial / baseline
   - [2-HYDRO_masking.ipynb](Notebooks/HYDRO/2-HYDRO_masking.ipynb) — tutorial / masking
