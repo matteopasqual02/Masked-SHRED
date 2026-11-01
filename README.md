@@ -37,21 +37,43 @@ uv sync --all-groups
 ## Quickstart
  
 ```python
-# --- Standard libraries and dataset loading ---
-# import numpy as np
-# ...
- 
+# --- Standard libraries ---
+import numpy as np
+import torch
+
 # --- Masked-SHRED imports ---
 from src.datamanager import DataManager
 from src.engine import SHREDEngine
 from src.train import fit, evaluate
 from src.mSHRED.mSHRED import mSHRED
-from src.utils import plot_training_curves, evaluate_model, plot_shred_reconstruction
+from src.utils import evaluate_model, plot_training_curves
+
+# --- Configuration ---
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+LAGS = 20
+TRAIN_SIZE, VAL_SIZE, TEST_SIZE = 0.8, 0.1, 0.1
+MASKING_TYPE = "double_channels"
+COMPRESS_H = COMPRESS_U = COMPRESS_V = 50
+ENCODER_DEPTH = 2
+N_HEADS = 4
+DIM_FEEDFORWARD = 128
+HIDDEN_SIZE = 64
+DECODER = "mlp"
+DECODER_HIDDEN_SIZES = [64, 128]
+DROPOUT = 0.1
+OPTIMIZER = "AdamW"
+LEARNING_RATE = 1e-3
+NUM_EPOCHS = 200
+PATIENCE = 20
+VERBOSE_TRAIN = True
+LR_SCHEDULER = None
+SCHEDULER_STEP_SIZE = 10
  
 # --- Load or build your data ---
-# Expected shapes: sensor measurements (time, n_sensors) -> full field (time, space)
-H, U, V = ...            # e.g. surface elevation, U/V velocity fields
-measurements = ...        # sparse sensor measurement stream
+# Replace these placeholders with arrays of shape (time, space) and
+# measurements of shape (time, n_sensors).
+H, U, V = load_your_fields()
+measurements = load_your_sensor_measurements()
  
 # --- Data manager: builds lagged, masked train/val/test datasets ---
 manager = DataManager(lags=LAGS, train_size=TRAIN_SIZE, val_size=VAL_SIZE, test_size=TEST_SIZE)
@@ -102,7 +124,10 @@ test_error = evaluate_model(
 # --- Reconstruct full state from sparse sensors ---
 engine = SHREDEngine(manager, mshred)
 test_reconstruction = engine.sensor_to_reconstruction_dataset(test_dataset)
-plot_shred_reconstruction(test_reconstruction)
+
+# test_reconstruction maps each field id to its reconstructed NumPy array.
+for field_id, reconstruction in test_reconstruction.items():
+    print(field_id, reconstruction.shape)
 ```
  
 ## Repository Structure
