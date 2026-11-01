@@ -23,6 +23,7 @@ from src.utils import (
     plot_training_curves,
     evaluate_model,
     evaluate_reconstruction_metrics,
+    make_video,
 )
 
 
@@ -35,19 +36,60 @@ class TestToNumpyArray:
         result = _to_numpy_array(arr)
         assert isinstance(result, np.ndarray)
         np.testing.assert_array_equal(result, arr)
-    
+
     def test_to_numpy_array_with_torch_tensor(self):
         """Test conversion with torch tensor."""
         tensor = torch.tensor([[1, 2], [3, 4]], dtype=torch.float32)
         result = _to_numpy_array(tensor)
         assert isinstance(result, np.ndarray)
         np.testing.assert_array_almost_equal(result, tensor.numpy())
-    
+
     def test_to_numpy_array_with_list(self):
         """Test conversion with list."""
         lst = [[1, 2], [3, 4]]
         result = _to_numpy_array(lst)
         assert isinstance(result, np.ndarray)
+
+
+class TestMakeVideo:
+    def test_make_video_returns_animation(self):
+        sequences = [np.arange(3).reshape(3, 1), np.arange(3, 6).reshape(3, 1)]
+
+        def plot(snapshot):
+            import matplotlib.pyplot as plt
+
+            plt.plot(snapshot)
+
+        animation = make_video(sequences, plot, titles=["Truth", "Prediction"])
+
+        assert animation is not None
+        animation._fig.clear()
+
+    def test_make_video_saves_gif(self, tmp_path):
+        sequences = [np.arange(2).reshape(2, 1)]
+
+        def plot(snapshot):
+            import matplotlib.pyplot as plt
+
+            plt.plot(snapshot)
+
+        output = tmp_path / "trajectory.gif"
+        make_video(sequences, plot, save=True, name=output, fps=2)
+
+        assert output.exists()
+        assert output.stat().st_size > 0
+
+    @pytest.mark.parametrize(
+        "kwargs",
+        [
+            {"yts": [], "plot": lambda _: None},
+            {"yts": [np.ones((2, 1)), np.ones((3, 1))], "plot": lambda _: None},
+            {"yts": [np.ones((2, 1))], "plot": lambda _: None, "titles": []},
+        ],
+    )
+    def test_make_video_rejects_invalid_inputs(self, kwargs):
+        with pytest.raises(ValueError):
+            make_video(**kwargs)
 
 
 class TestMedianComputation:

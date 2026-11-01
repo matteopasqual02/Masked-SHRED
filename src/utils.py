@@ -1,5 +1,6 @@
 import numpy as np  #type: ignore
 import matplotlib.pyplot as plt  #type: ignore
+from matplotlib.animation import FFMpegWriter, FuncAnimation, PillowWriter  #type: ignore
 import torch  #type: ignore
 from torch.utils.data import DataLoader  #type: ignore
 
@@ -13,6 +14,121 @@ from torch.utils.data import DataLoader  #type: ignore
 # - last_value_imputer_single_dataset: perform last value imputation on the input data using the last observed value 
 # - generate_GRUD_4D_input: generate a 4D input tensor for GRUD from the original measurements, including the original values, last observed values, masks, and time since last observation
 # - generate_channels: generate interleaved data and mask channels for each sensor from the original measurements   
+
+def make_video(
+    yts,
+    plot,
+    titles=None,
+    fontsize=None,
+    title_weight="normal",
+    figsize=None,
+    vertical=False,
+    axis=False,
+    save=False,
+    name="video",
+    fps=10,
+    transparent=False,
+):
+    """Create an animation from one or more sequences of snapshots.
+
+    Parameters
+    ----------
+    yts : sequence of array-like
+        Sequences with shape ``(n_frames, ...)``. All sequences must have the
+        same number of frames.
+    plot : callable
+        Function that plots one snapshot, called as ``plot(sequence[i])``.
+    titles : sequence of str, optional
+        Title for each sequence.
+    fontsize : int or float, optional
+        Font size for subplot titles.
+    title_weight : str, default="normal"
+        Font weight for subplot titles.
+    figsize : tuple, optional
+        Figure size passed to Matplotlib.
+    vertical : bool, default=False
+        Stack subplots vertically instead of horizontally.
+    axis : bool, default=False
+        Keep axes visible when true.
+    save : bool, default=False
+        Save the animation when true. Otherwise return it for display in a
+        notebook or further customization.
+    name : str or path-like, default="video"
+        Output path. A ``.gif`` suffix is added when no suffix is provided.
+        ``.gif`` uses Pillow; ``.mp4`` uses Matplotlib's ffmpeg writer.
+    fps : int, default=10
+        Frames per second used when saving.
+    transparent : bool, default=False
+        Save with a transparent figure and axes background.
+
+    Returns
+    -------
+    matplotlib.animation.FuncAnimation
+        The created animation.
+    """
+    if len(yts) == 0:
+        raise ValueError("yts must contain at least one sequence")
+    if fps <= 0:
+        raise ValueError("fps must be positive")
+
+    arrays = [np.asarray(sequence) for sequence in yts]
+    if any(array.ndim == 0 for array in arrays):
+        raise ValueError("each sequence must contain a frame dimension")
+    n_frames = arrays[0].shape[0]
+    if n_frames == 0:
+        raise ValueError("sequences must contain at least one frame")
+    if any(array.shape[0] != n_frames for array in arrays):
+        raise ValueError("all sequences must have the same number of frames")
+
+    if titles is None:
+        titles = [None] * len(arrays)
+    elif len(titles) != len(arrays):
+        raise ValueError("titles must have one entry per sequence")
+
+    fig = plt.figure(figsize=figsize)
+
+    def update(frame):
+        fig.clear()
+        for index, sequence in enumerate(arrays):
+            if vertical:
+                ax = fig.add_subplot(len(arrays), 1, index + 1)
+            else:
+                ax = fig.add_subplot(1, len(arrays), index + 1)
+            fig.sca(ax)
+            plot(sequence[frame])
+            if titles[index] is not None:
+                ax.set_title(
+                    titles[index],
+                    fontsize=fontsize,
+                    fontweight=title_weight,
+                )
+            if transparent:
+                ax.patch.set_alpha(0)
+            if not axis:
+                ax.axis("off")
+        if transparent:
+            fig.patch.set_alpha(0)
+        fig.tight_layout()
+        return fig.axes
+
+    animation = FuncAnimation(fig, update, frames=n_frames, blit=False)
+    if not save:
+        return animation
+
+    output_path = str(name)
+    if not output_path.lower().endswith((".gif", ".mp4")):
+        output_path += ".gif"
+    if output_path.lower().endswith(".gif"):
+        writer = PillowWriter(fps=fps)
+    else:
+        writer = FFMpegWriter(fps=fps)
+    animation.save(
+        output_path,
+        writer=writer,
+        savefig_kwargs={"transparent": transparent},
+    )
+    plt.close(fig)
+    return animation
 
 def _to_numpy_array(X):
     # Convert tensor-like inputs to numpy arrays for numpy-based imputation routines.

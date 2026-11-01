@@ -125,9 +125,16 @@ test_error = evaluate_model(
 engine = SHREDEngine(manager, mshred)
 test_reconstruction = engine.sensor_to_reconstruction_dataset(test_dataset)
 
-# test_reconstruction maps each field id to its reconstructed NumPy array.
-for field_id, reconstruction in test_reconstruction.items():
-    print(field_id, reconstruction.shape)
+# --- Make a video ---
+from src.utils import make_video
+make_video(
+    [ground_truth[-30:], test_reconstruction[-30:]],
+    plot=plot_snapshot,
+    titles=["Ground truth", "Best model"],
+    save=True,
+    name="last_month.gif",
+    fps=10,
+)
 ```
  
 ## Repository Structure
