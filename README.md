@@ -159,6 +159,10 @@ The most important notebooks are listed here.
   - 7B - embedding smoothness analysis
   - 7C - hyperparameter tuning analysis
 
+  - ztable mse mre -> tabella con risultati del paper in MSE/MRE
+  - ztable mse mre -> tabella con risultati del paper in rmse/nmae
+
+
 
 - ORESUND (real data)
   - [0-ORESUND_exploration.ipynb](Notebooks/ORESUND/0-ORESUND_exploration.ipynb) — tutorial
