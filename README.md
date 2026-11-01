@@ -1,20 +1,20 @@
 # Masked-SHRED
 
-**Real-time state reconstruction from sparse, asynchronous, and incomplete sensor measurements.**
+**Fault-tolerant sparse sensing for real-time state reconstruction from sparse, asynchronous, and missing sensor measurements.**
  
-Real-world sensing systems are inherently imperfect: sensors fail, disconnect intermittently, sample at asynchronous rates, and are subject to noise — producing measurement streams that are irregular, incomplete, and heterogeneous. Yet most sensing strategies for real-time state reconstruction assume full observability, a constraint that severely limits their applicability in operational settings.
+Real-world sensing systems are inherently imperfect: sensors may fail, intermittently disconnect, operate with asynchronous sampling rates, and are subject to noise, leading to measurement streams that are irregular, incomplete, and heterogeneous. Nevertheless, sensing strategies for real-time state reconstruction typically assume synchronous and continuously active sensors, a constraint that substantially limits their applicability in operational environments.
  
-**Masked-SHRED** addresses this gap by introducing and systematically evaluating a hierarchy of transformer-based masking mechanisms — channel-wise, hidden-state, and multi-head self-attention masking — within the [Shallow Recurrent Decoder (SHRED)](https://arxiv.org/abs/2301.12011) framework. By incorporating the binary missingness mask at multiple levels of the architecture, the model becomes explicitly aware of sensor availability, enabling high-dimensional state estimation from sparse, asynchronous, and missing sensor measurements.
+In this work, **Masked-SHRED** introduces fault-tolerant sparse sensing strategies in the context of the [Shallow Recurrent Decoder (SHRED)](https://arxiv.org/abs/2301.12011) to enable high-dimensional state estimation from sparse, asynchronous, and missing sensor measurements. Specifically, we consider naive imputation strategies, fault-tolerant recurrent temporal encoders, and four different transformer-based masking mechanisms to make SHRED explicitly aware of sensor availability through the binary data-missingness mask.
  
-We further introduce a **multi-step decoding training objective**: by decoding at intermediate timesteps and applying a weighted reconstruction loss, the model receives auxiliary supervision throughout the temporal axis, encouraging smoother and more coherent latent trajectories.
+Moreover, we further introduce a **multi-step decoding training objective** for SHRED, resulting in smoother latent trajectories and more robust predictions.
 
 ![Figure 1](Images_final/fig1.svg)
  
-Across synthetic benchmarks and a real-world hydrodynamic dataset, we show that:
+Throughout a synthetic benchmark and three real-world problems in hydrodynamic and ocean modeling, we show that:
  
-1. **Transformer-based masking outperforms alternatives.** It beats standard imputation techniques, recurrent architectures designed for incomplete time-series, and the conventional SHRED framework restricted to continuously available sensors — especially under heterogeneous missing-data patterns and over extended prediction horizons.
-2. **Multi-step decoding improves robustness.** Auxiliary supervision during training enhances reconstruction fidelity and robustness to heterogeneous missing-data patterns.
-3. **No added inference cost.** Both contributions preserve the computational efficiency of the original SHRED framework — masking is integrated directly into the encoder, and auxiliary decoding branches are discarded after training.
+1. Transformer-based masking mechanisms outperform standard imputation techniques and fault-tolerant recurrent architectures.
+2. The multi-step decoding training objective enhances reconstruction fidelity and robustness in the presence of heterogeneous missing-data patterns.
+3. Computational SHRED efficiency is preserved, with no additional inference-time overhead.
 
 ## Table of Contents
  
