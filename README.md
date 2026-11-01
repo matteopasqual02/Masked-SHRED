@@ -137,37 +137,50 @@ Full experimental results, including synthetic benchmarks and the real-world hyd
 The most important notebooks are listed here.
 
 - DGF (simulated data)
-  - [0-DGF.ipynb](Notebooks/DGF/0-DGF.ipynb) — tutorial
-  - [1-DGF_results.ipynb](Notebooks/DGF/1-DGF_results.ipynb) — results with syntetic sensor falitures
-  - [2-DGF_multi_fidelity.ipynb](Notebooks/DGF/2-DGF_multi_fidelity.ipynb) — results with not overlapping sensors
 
+  | Code | Notebook | Description |
+  | --- | --- | --- |
+  | 0 | [0-DGF.ipynb](Notebooks_results/DGF/0-DGF.ipynb) | Tutorial |
+  | 1 | [1-DGF_results.ipynb](Notebooks_results/DGF/1-DGF_results.ipynb) | Results with synthetic sensor failures |
+  | 2 | [2-DGF_multi_fidelity.ipynb](Notebooks_results/DGF/2-DGF_multi_fidelity.ipynb) | Results with non-overlapping sensors |
 
 - HYDRO (real data)
-  - 0 exploration 1: data availability
-  - 0B exploration 2: dataset exploration
-  - [1-HYDRO_baseline.ipynb](Notebooks/HYDRO/1-HYDRO_baseline.ipynb) — tutorial on baseline models
-  - [2-HYDRO_masking.ipynb](Notebooks/HYDRO/2-HYDRO_masking.ipynb) — tutorial on  masking models
-  - 3 tutorial on extra sparse sensing settings
 
-  - [4-HYDRO_results.ipynb](Notebooks/HYDRO/4-HYDRO_results.ipynb) — final results
-  - [4B-HYDRO_results_ErrorAccumulation.ipynb](Notebooks/HYDRO/4b-HYDRO_results_ErrorAccumulation.ipynb) — error accumulation baseline vs best performing model
-  - 4C paper reconstruction plot
-  - [5-HYDRO_results_TUNING.ipynb](Notebooks/HYDRO/5-HYDRO_results_TUNING.ipynb) — hyperparameter tuning
-
-
-  - [7-HYDRO_LAGGED_training.ipynb](Notebooks/HYDRO/7-HYDRO_LAGGED_training.ipynb) — lagged training
-  - 7B - embedding smoothness analysis
-  - 7C - hyperparameter tuning analysis
-
-  - ztable mse mre -> tabella con risultati del paper in MSE/MRE
-  - ztable mse mre -> tabella con risultati del paper in rmse/nmae
-
-
+  | Code | Notebook | Description |
+  | --- | --- | --- |
+  | 0 | [0-HYDRO_data_availability.ipynb](Notebooks_results/HYDRO/0-HYDRO_data_availability.ipynb) | Data availability exploration |
+  | 0B | [0B-HYDRO_data_exploration.ipynb](Notebooks_results/HYDRO/0B-HYDRO_data_exploration.ipynb) | Dataset exploration |
+  | 1 | [1-HYDRO_baseline.ipynb](Notebooks_results/HYDRO/1-HYDRO_baseline.ipynb) | Tutorial on baseline models |
+  | 2 | [2-HYDRO_masking.ipynb](Notebooks_results/HYDRO/2-HYDRO_masking.ipynb) | Tutorial on masking models |
+  | 3 | [3-HYDRO_less_sensors.ipynb](Notebooks_results/HYDRO/3-HYDRO_less_sensors.ipynb) | Tutorial on extra sparse sensing settings |
+  | 4 | [4-HYDRO_results.ipynb](Notebooks_results/HYDRO/4-HYDRO_results.ipynb) | Final results |
+  | 4B | [4B-HYDRO_results_ErrorAccumulation.ipynb](Notebooks_results/HYDRO/4B-HYDRO_results_ErrorAccumulation.ipynb) | Error accumulation: baseline vs. best-performing model |
+  | 4C | [4C-HYDRO_paper_reconstruction_plot.ipynb](Notebooks_results/HYDRO/4C-HYDRO_paper_reconstruction_plot.ipynb) | Paper reconstruction plot |
+  | 5 | [5-HYDRO_hyperparameter_tuning.ipynb](Notebooks_results/HYDRO/5-HYDRO_hyperparameter_tuning.ipynb) | Hyperparameter tuning |
+  | 6 | [6-HYDRO_ROM_training.ipynb](Notebooks_results/HYDRO/6-HYDRO_ROM_training.ipynb) | ROM training |
+  | 7 | [7-HYDRO_LAGGED_training.ipynb](Notebooks_results/HYDRO/7-HYDRO_LAGGED_training.ipynb) | Lagged training |
+  | 7B | [7B-HYDRO_LAGGED_embedding_smoothness.ipynb](Notebooks_results/HYDRO/7B-HYDRO_LAGGED_embedding_smoothness.ipynb) | Embedding smoothness analysis |
+  | 7C | [7C-HYDRO_LAGGED_new_plot_tuning.ipynb](Notebooks_results/HYDRO/7C-HYDRO_LAGGED_new_plot_tuning.ipynb) | Hyperparameter tuning analysis |
+  | FINAL 1 | [FINAL-1-HYDRO_training.ipynb](Notebooks_results/HYDRO/FINAL-1-HYDRO_training.ipynb) | Paper result training |
+  | FINAL 2 | [FINAL-2-HYDRO_training_lagged.ipynb](Notebooks_results/HYDRO/FINAL-2-HYDRO_training_lagged.ipynb) | Paper result lagged training |
+  | z-MSE/MRE | [z-Table-MSE-MRE.ipynb](Notebooks_results/HYDRO/z-Table-MSE-MRE.ipynb) | Paper results table in MSE/MRE |
+  | z-RMSE/NMAE | [z-Table-RMSE-NMAE.ipynb](Notebooks_results/HYDRO/z-Table-RMSE-NMAE.ipynb) | Paper results table in RMSE/NMAE |
 
 - ORESUND (real data)
-  - [0-ORESUND_exploration.ipynb](Notebooks/ORESUND/0-ORESUND_exploration.ipynb) — tutorial
-  - [1-ORESUND_RESULT.ipynb](Notebooks/ORESUND/1-ORESUND_RESULT.ipynb) — results
-  - [2-ORESUND_LAGGED.ipynb](Notebooks/ORESUND/2-ORESUND_LAGGED.ipynb) — lagged training
+
+  | Code | Notebook | Description |
+  | --- | --- | --- |
+  | 0 | [0-ORESUND_data_availability.ipynb](Notebooks_results/ORESUND/0-ORESUND_data_availability.ipynb) | Data availability exploration |
+  | 0B | [0B-ORESUND_data_exploration.ipynb](Notebooks_results/ORESUND/0B-ORESUND_data_exploration.ipynb) | Dataset exploration |
+  | 1 | [1-ORESUND_RESULT.ipynb](Notebooks_results/ORESUND/1-ORESUND_RESULT.ipynb) | Results |
+  | 1B | [1B-ORESUND_reconstruction_plot.ipynb](Notebooks_results/ORESUND/1B-ORESUND_reconstruction_plot.ipynb) | Paper reconstruction plot |
+  | 2 | [2-ORESUND_LAGGED.ipynb](Notebooks_results/ORESUND/2-ORESUND_LAGGED.ipynb) | Lagged training |
+  | FINAL 1 | [FINAL-1-ORESUND_training.ipynb](Notebooks_results/ORESUND/FINAL-1-ORESUND_training.ipynb) | Paper result training |
+  | FINAL 2 | [FINAL-2-ORESUND_training_lagged.ipynb](Notebooks_results/ORESUND/FINAL-2-ORESUND_training_lagged.ipynb) | Paper result lagged training |
+  | z-MSE/MRE | [z-Table-MSE-MRE.ipynb](Notebooks_results/ORESUND/z-Table-MSE-MRE.ipynb) | Paper results table in MSE/MRE |
+  | z-RMSE/NMAE | [z-Table-RMSE-NMAE.ipynb](Notebooks_results/ORESUND/z-Table-RMSE-NMAE.ipynb) | Paper results table in RMSE/NMAE |
+
+
 - SST (simulated data)
   - [0-SST_downloader.ipynb](Notebooks/SST/0-SST_downloader.ipynb) — dataset download
   - [1-SST_init.ipynb](Notebooks/SST/1-SST_init.ipynb) — tutorial
