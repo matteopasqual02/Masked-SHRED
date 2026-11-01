@@ -185,10 +185,11 @@ The most important notebooks are listed here.
   - [0-SST_downloader.ipynb](Notebooks/SST/0-SST_downloader.ipynb) — dataset download
   - [1-SST_init.ipynb](Notebooks/SST/1-SST_init.ipynb) — tutorial
   - [2-SST_results.ipynb](Notebooks/SST/2-SST_results.ipynb) — results
-- SST + BUOY DATA (real data)
+  
   - [3-SST_BuoyData.ipynb](Notebooks/SST/3-SST_BuoyData.ipynb) — buoy-data tutorial
   - [4-SST_BuoyData_results.ipynb](Notebooks/SST/4-SST_BuoyData_results.ipynb) — results
   - [5-SST_BuoyData_cs_shred.ipynb](Notebooks/SST/5-SST_BuoyData_cs_shred.ipynb) — CS-SHRED results
+  
 - SWE (simulated data)
   - [0-SWE-ROM_exploration.ipynb](Notebooks/SWE/0-SWE-ROM_exploration.ipynb) — dataset download and exploration
   - [1-SWE-ROM.ipynb](Notebooks/SWE/1-SWE-ROM.ipynb) — tutorial
