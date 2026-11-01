@@ -156,6 +156,8 @@ The most important notebooks are listed here.
 
 
   - [7-HYDRO_LAGGED_training.ipynb](Notebooks/HYDRO/7-HYDRO_LAGGED_training.ipynb) — lagged training
+  - 7B - embedding smoothness analysis
+  - 7C - hyperparameter tuning analysis
 
 
 - ORESUND (real data)
