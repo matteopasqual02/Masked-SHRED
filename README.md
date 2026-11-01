@@ -143,12 +143,18 @@ The most important notebooks are listed here.
 
 
 - HYDRO (real data)
-  - [1-HYDRO_baseline.ipynb](Notebooks/HYDRO/1-HYDRO_baseline.ipynb) — tutorial / baseline
-  - [2-HYDRO_masking.ipynb](Notebooks/HYDRO/2-HYDRO_masking.ipynb) — tutorial / masking
+  - 0 exploration 1: data availability
+  - 0B exploration 2: dataset exploration
+  - [1-HYDRO_baseline.ipynb](Notebooks/HYDRO/1-HYDRO_baseline.ipynb) — tutorial on baseline models
+  - [2-HYDRO_masking.ipynb](Notebooks/HYDRO/2-HYDRO_masking.ipynb) — tutorial on  masking models
+  - 3 tutorial on extra sparse sensing settings
+
   - [4-HYDRO_results.ipynb](Notebooks/HYDRO/4-HYDRO_results.ipynb) — results
   - [4b-HYDRO_results_ErrorAccumulation.ipynb](Notebooks/HYDRO/4b-HYDRO_results_ErrorAccumulation.ipynb) — error accumulation
   - [5-HYDRO_results_TUNING.ipynb](Notebooks/HYDRO/5-HYDRO_results_TUNING.ipynb) — hyperparameter tuning
   - [7-HYDRO_LAGGED_training.ipynb](Notebooks/HYDRO/7-HYDRO_LAGGED_training.ipynb) — lagged training
+
+
 - ORESUND (real data)
   - [0-ORESUND_exploration.ipynb](Notebooks/ORESUND/0-ORESUND_exploration.ipynb) — tutorial
   - [1-ORESUND_RESULT.ipynb](Notebooks/ORESUND/1-ORESUND_RESULT.ipynb) — results
