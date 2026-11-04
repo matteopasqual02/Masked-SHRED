@@ -244,7 +244,17 @@ Full experimental results are available under [`Notebooks_results/`](Notebooks_r
 
 ## Citation
 
-TODO
+If you use this code for your work, please cite
+```bibtex
+@misc{pasqual2026faulttolerantshallowrecurrentdecoders,
+      title={Fault-tolerant shallow recurrent decoders for sparse sensing with missing sensor measurements}, 
+      author={Matteo Romilio Pasqual and Matteo Tomasetto and J. Nathan Kutz and Andrea Manzoni},
+      year={2026},
+      eprint={2611.04893},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG},
+      url={https://arxiv.org/abs/2611.04893}, 
+}
 
 ## License
  
